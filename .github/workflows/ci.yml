@@ -51,6 +51,13 @@ jobs:
             xcrun simctl spawn booted launchctl list | grep -q com.skipcast.app
             xcrun simctl terminate booted com.skipcast.app
           done
+          for screen in player show; do
+            xcrun simctl launch booted com.skipcast.app -selectedTab 0 -demoScreen $screen
+            sleep 25
+            xcrun simctl io booted screenshot "screenshots/$screen.png"
+            xcrun simctl spawn booted launchctl list | grep -q com.skipcast.app
+            xcrun simctl terminate booted com.skipcast.app
+          done
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4

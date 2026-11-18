@@ -6,6 +6,7 @@ struct RootView: View {
     @State private var showingPlayer = false
     /// Reopen on the tab the user was last on.
     @AppStorage("selectedTab") private var selectedTab = 0
+    @State private var demoPodcast: Podcast?
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -30,6 +31,12 @@ struct RootView: View {
             NowPlayingView()
                 .presentationDragIndicator(.visible)
         }
+        #if DEBUG
+        .sheet(item: $demoPodcast) { podcast in
+            NavigationStack { PodcastDetailView(podcast: podcast) }
+        }
+        .task { await openDemoScreenIfRequested() }
+        #endif
         .alert("Something went wrong", isPresented: Binding(get: { library.lastError != nil }, set: { if !$0 { library.lastError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -37,6 +44,29 @@ struct RootView: View {
         }
     }
 }
+
+#if DEBUG
+extension RootView {
+    /// Debug builds launched with `-demoScreen player` or `-demoScreen show`
+    /// open straight on that screen, so screenshots can be taken unattended.
+    fileprivate func openDemoScreenIfRequested() async {
+        guard let screen = UserDefaults.standard.string(forKey: "demoScreen") else { return }
+        for _ in 0..<60 {
+            if let podcast = library.podcasts().first(where: { $0.title.contains("Huberman") }),
+               let episode = podcast.sortedEpisodes.first(where: { $0.duration > 3600 }) ?? podcast.sortedEpisodes.first {
+                if screen == "player" {
+                    player.play(episode)
+                    showingPlayer = true
+                } else {
+                    demoPodcast = podcast
+                }
+                return
+            }
+            try? await Task.sleep(for: .seconds(1))
+        }
+    }
+}
+#endif
 
 private struct MiniPlayerModifier: ViewModifier {
     @Environment(PlayerEngine.self) private var player
