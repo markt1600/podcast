@@ -47,18 +47,29 @@ public struct EpisodeAnalyzer: Sendable {
         let text = track.text as NSString
         let whole = NSRange(location: 0, length: text.length)
         let returns = breakIn.matches(in: track.text, range: whole).map { track.wordIndex(atUTF16: $0.range.location) }
-        var output: [AdSegment] = []
+        // Two kinds of opening: "we'll be right back", after which the break starts,
+        // and "this episode is brought to you by…", which is itself the start of a
+        // read that the host closes with "now back to the episode".
+        var openings: [(start: TimeInterval, limit: TimeInterval)] = []
         for match in breakOut.matches(in: track.text, range: whole) {
             let outWord = track.sentenceEnd(after: track.wordIndex(atUTF16: match.range.location + match.range.length - 1))
-            guard outWord + 1 < track.words.count else { continue }
-            let start = track.words[outWord + 1].start
+            if outWord + 1 < track.words.count { openings.append((track.words[outWord + 1].start, maximumLength)) }
+        }
+        for cue in cues where cue.label == "sponsor attribution" {
+            openings.append((track.words[track.sentenceStart(before: cue.first)].start, 150))
+        }
+        openings.sort { $0.start < $1.start }
+
+        var output: [AdSegment] = []
+        for opening in openings {
+            let start = opening.start
             guard start >= (output.last?.end ?? 0),
-                  let inWord = returns.first(where: { track.words[$0].start > start }) else { continue }
-            let end = track.words[track.sentenceStart(before: inWord)].start
+                  let inWord = returns.first(where: { track.words[$0].start > start + 1 }) else { continue }
+            let end = track.words[inWord].start
             // Needs to look like a break: a plausible length, and sponsors named all
             // the way through it. (A stray "welcome back" minutes after an
             // unrelated "stay with me" must not swallow the conversation between.)
-            guard end - start >= 15, end - start <= maximumLength else { continue }
+            guard end - start >= 15, end - start <= opening.limit else { continue }
             let evidence = cues.filter { $0.weight >= 3 || $0.brand != nil }.map { track.words[$0.first].start }
                 .filter { (start...end).contains($0) }
             guard !evidence.isEmpty else { continue }
