@@ -21,23 +21,31 @@ permission. Scanning happens on the device; audio is never uploaded.
 
 ## How ads are found
 
-Feeds don't mark where ads are, so SkipCast combines three sources of evidence
-(`Core/Sources/PodcastCore`):
+Feeds don't mark where ads are, so SkipCast combines several sources of
+evidence (`Core/Sources/PodcastCore`):
 
 | Source | Needs a download? | What it gives |
 | --- | --- | --- |
 | **Show notes index** – timestamped notes such as `(00:06:10) Sponsor: LMNT` | No | Instant ad and intro positions for shows that publish them |
-| **What is said** – the episode is transcribed on the phone and searched for the shape of a sponsor read: an attribution, then a vanity URL / promo code / offer | Yes | Exact start and end of each read, to the sentence |
-| **Repetition** – passages spoken word-for-word in another episode, or twice in this one | Yes | Inserted ads with no "ad language", recurring intros/outros, exact edges of reads heard before |
+| **What is said** – the episode is transcribed on the phone and searched for the shape of a sponsor read: an attribution, then a vanity URL / promo code / offer | Yes | Start and end of each read, to the sentence |
+| **Announced breaks** – "we'll be right back … and now back to the show" | Yes | The whole break, including spots with no ad language |
+| **Edit pauses** – inserted ads leave a beat of silence at each join; conversation almost never pauses that long | Yes | Exact edges, story-style lead-ins, neighbouring spots |
+| **Repetition** – passages spoken word-for-word in another episode, or twice in this one | Yes | Inserted ads, recurring intros/outros |
 
 A single cue is never enough to skip: a block needs several independent pieces
-of evidence, so a guest mentioning their website or a host thanking "our
-sponsors" in the outro is left alone. Every skip shows an **Undo** button, and
-detected breaks are drawn on the progress bar.
+of evidence, so a guest mentioning their website, a host thanking "our
+sponsors" in the outro, or a plug for the show's own newsletter is left alone.
+Every skip shows an **Undo** button, and detected breaks are drawn on the
+progress bar.
 
 When only show notes are available and the stream turns out to be longer than
 the published duration (extra ads were inserted, so timestamps have shifted),
 skipping is switched off for that play rather than risk cutting content.
+
+Intros are found the same way: an `Intro` entry in the show notes, the host's
+hand-off ("without further ado…", "and now for my conversation with…"), a
+cold-open teaser that replays a later clip, and opening ads. Each show also has
+a manual "skip first N seconds" setting.
 
 ### Checking it against real episodes
 
