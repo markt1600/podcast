@@ -43,8 +43,10 @@ jobs:
           xcrun simctl bootstatus "$DEVICE" -b
           xcrun simctl install booted build/Build/Products/Debug-iphonesimulator/SkipCast.app
           mkdir -p screenshots
+          # Answer the speech-recognition prompt up front so it doesn't cover the screenshots.
+          xcrun simctl privacy booted grant speech-recognition com.skipcast.app
           # Open each tab in turn; the app must still be running after a few seconds.
-          for tab in 1 3 0; do
+          for tab in 1 3 0 2; do
             xcrun simctl launch booted com.skipcast.app -selectedTab $tab
             sleep 25
             xcrun simctl io booted screenshot "screenshots/tab-$tab.png"
@@ -53,7 +55,7 @@ jobs:
           done
           for screen in player show; do
             xcrun simctl launch booted com.skipcast.app -selectedTab 0 -demoScreen $screen
-            sleep 25
+            sleep 40
             xcrun simctl io booted screenshot "screenshots/$screen.png"
             xcrun simctl spawn booted launchctl list | grep -q com.skipcast.app
             xcrun simctl terminate booted com.skipcast.app
