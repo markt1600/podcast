@@ -50,6 +50,9 @@ final class Episode {
     /// True when the ad timings were measured on the downloaded file and are
     /// therefore only valid for that exact file.
     var analysisIsFileSpecific: Bool = false
+    /// Set when playback showed that this audio does not line up with the
+    /// show-notes timestamps (ads were inserted), so they must not be trusted.
+    var notesTimingsUnreliable: Bool = false
 
     /// Transcript fingerprint (`[UInt64]` bytes), kept so later episodes can be
     /// checked for sponsor reads and intros repeated from this one.
@@ -91,6 +94,18 @@ final class Episode {
             }
         }
         set { fingerprintData = newValue.withUnsafeBufferPointer { Data(buffer: $0) } }
+    }
+
+    /// The publisher's own show notes list this episode's sponsor breaks, so
+    /// there is no need to listen to the audio to find them.
+    var adsKnownFromNotes: Bool {
+        analysisState == .done && !analysisIsFileSpecific && !notesTimingsUnreliable
+            && adSegments.contains { $0.kind == .ad }
+    }
+
+    /// Ads have been located, by a scan of the audio or from the show notes.
+    var adsLocated: Bool {
+        (analysisState == .done && analysisIsFileSpecific) || adsKnownFromNotes
     }
 
     /// Segments that playback should jump over given the user's preferences.

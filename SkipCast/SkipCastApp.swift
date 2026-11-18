@@ -41,6 +41,9 @@ final class AppModel {
             analysis.quickScan(episode)
             if settings.autoAnalyze { analysis.prioritize(episode) }
         }
+        player.onNotesMismatch = { [unowned self] episode in
+            analysis.enqueue(episode, force: true)
+        }
         player.onFinished = { [unowned self] episode in
             library.markPlayed(episode, played: true)
         }

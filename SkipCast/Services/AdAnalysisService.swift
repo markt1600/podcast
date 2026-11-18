@@ -42,7 +42,9 @@ final class AdAnalysisService {
         episode.contentStart = analysis.contentStart
         episode.analysisIsFileSpecific = false
         episode.analysisState = .done
-        episode.analysisNote = "From the show notes. Download the episode for exact timing."
+        episode.analysisNote = analysis.segments.contains { $0.kind == .ad }
+            ? "Sponsor breaks are listed in the show notes, so no scan is needed."
+            : "From the show notes. Download the episode to find its ads."
     }
 
     private func baseEvidence(for episode: Episode) -> EpisodeEvidence {
@@ -68,8 +70,13 @@ final class AdAnalysisService {
             return
         }
         guard !queue.contains(where: { $0.uid == episode.uid }) else { return }
-        // Use what the show notes say straight away; the scan refines it later.
+        // Use what the show notes say straight away.
         quickScan(episode)
+        // When the notes list the sponsor breaks themselves, that is the answer:
+        // scanning the audio would spend minutes of battery to learn the same thing.
+        // (A scan can still be asked for by hand, and runs anyway if playback
+        // finds the audio doesn't match the notes.)
+        if !force, episode.adsKnownFromNotes { return }
         if episode.analysisState != .done { episode.analysisState = .queued }
         queue.append(episode)
         waitingCount = queue.count

@@ -88,7 +88,8 @@ struct EpisodeRow: View {
                 Label(ads.isEmpty ? "No ads" : "\(ads.count) ad\(ads.count == 1 ? "" : "s")", systemImage: "checkmark.seal.fill")
                     .foregroundStyle(ads.isEmpty ? Color.secondary : Color.orange)
             } else if !ads.isEmpty {
-                Label("\(ads.count) ad\(ads.count == 1 ? "" : "s") · notes", systemImage: "list.bullet.rectangle")
+                // Taken from the publisher's show notes; no scan needed.
+                Label("\(ads.count) ad\(ads.count == 1 ? "" : "s") · from notes", systemImage: "checkmark.seal")
                     .foregroundStyle(.orange)
             }
         }

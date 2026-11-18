@@ -31,9 +31,9 @@ struct DownloadsView: View {
     /// Overall state of the ad scan across everything downloaded.
     @ViewBuilder private var scanSummary: some View {
         let downloaded = episodes.filter { $0.downloadState == .downloaded }
-        let scanned = downloaded.filter { $0.analysisState == .done && $0.analysisIsFileSpecific }.count
+        let scanned = downloaded.filter(\.adsLocated).count
         VStack(alignment: .leading, spacing: 6) {
-            Label("\(scanned) of \(downloaded.count) episodes scanned for ads", systemImage: "waveform.badge.magnifyingglass")
+            Label("Ads located in \(scanned) of \(downloaded.count) episodes", systemImage: "waveform.badge.magnifyingglass")
                 .font(.subheadline.weight(.semibold))
             if let uid = analysis.currentUID, let current = episodes.first(where: { $0.uid == uid }) {
                 ProgressView(value: analysis.progress[uid] ?? 0)

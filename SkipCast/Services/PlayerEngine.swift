@@ -50,6 +50,8 @@ final class PlayerEngine {
         episode?.podcast?.playbackSpeed ?? settings.playbackSpeed
     }
     @ObservationIgnored var onWillPlay: ((Episode) -> Void)?
+    /// Called when the audio turns out not to match the show-notes timestamps.
+    @ObservationIgnored var onNotesMismatch: ((Episode) -> Void)?
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -104,7 +106,7 @@ final class PlayerEngine {
         self.episode = episode
         allowedSegments = []
         lastSkip = nil
-        skipDisabledReason = nil
+        skipDisabledReason = episode.notesTimingsUnreliable && !episode.analysisIsFileSpecific ? Self.mismatchReason : nil
         duration = episode.duration
         currentTime = episode.position
 
@@ -221,6 +223,8 @@ final class PlayerEngine {
         }
     }
 
+    private static let mismatchReason = "This audio has extra ads inserted, so the show-notes timings don’t line up. Ads will be skipped once the downloaded episode has been scanned."
+
     // MARK: - Ad skipping
 
     /// Segments eligible for skipping right now.
@@ -248,7 +252,9 @@ final class PlayerEngine {
             // noticeably longer, ads were inserted and those timings are off.
             if !episode.analysisIsFileSpecific, episode.duration > 0, abs(itemDuration - episode.duration) > 20,
                !episode.adSegments.isEmpty {
-                skipDisabledReason = "This stream has extra ads inserted, so show-notes timings don’t line up. Download the episode to skip ads accurately."
+                skipDisabledReason = Self.mismatchReason
+                episode.notesTimingsUnreliable = true
+                onNotesMismatch?(episode)
             }
             if episode.duration == 0 || episode.analysisIsFileSpecific || episode.localFileURL != nil { episode.duration = itemDuration }
             updateNowPlaying()
