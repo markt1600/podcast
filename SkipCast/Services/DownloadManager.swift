@@ -1,6 +1,9 @@
 import Foundation
 import SwiftData
 import Observation
+import OSLog
+
+private let log = Logger(subsystem: "com.skipcast.app", category: "downloads")
 
 /// Downloads episode audio with a background URLSession so transfers keep
 /// going while the app is suspended.
@@ -56,6 +59,7 @@ final class DownloadManager: NSObject {
         episode.downloadState = .downloading
         progress[episode.uid] = 0
         task.resume()
+        log.info("Started download of \(episode.title, privacy: .public)")
     }
 
     func cancel(_ episode: Episode) {
@@ -95,6 +99,11 @@ final class DownloadManager: NSObject {
 
     private func finished(uid: String, fileName: String?, error: String?) {
         progress[uid] = nil
+        if let error {
+            log.error("Download \(uid, privacy: .public) failed: \(error, privacy: .public)")
+        } else {
+            log.info("Download \(uid, privacy: .public) finished")
+        }
         guard let episode = episode(uid: uid) else {
             // Episode was removed while downloading; don't leave an orphan file.
             if let fileName { try? FileManager.default.removeItem(at: Episode.downloadsDirectory.appendingPathComponent(fileName)) }
