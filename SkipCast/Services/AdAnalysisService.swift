@@ -60,6 +60,8 @@ final class AdAnalysisService {
             return
         }
         guard !queue.contains(where: { $0.uid == episode.uid }) else { return }
+        // Use what the show notes say straight away; the scan refines it later.
+        quickScan(episode)
         if episode.analysisState != .done { episode.analysisState = .queued }
         queue.append(episode)
         startWorkerIfNeeded()
