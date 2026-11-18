@@ -3,13 +3,6 @@ import SwiftData
 import Observation
 import PodcastCore
 
-/// The outcome of scanning one audio file, as shared between devices.
-struct SharedScan: Codable, Equatable {
-    var segments: [AdSegment]
-    var contentStart: Double?
-    var savedAt: TimeInterval
-}
-
 /// Shares subscriptions, per-show settings and listening progress between
 /// the user's devices through iCloud's key-value store.
 ///
@@ -138,26 +131,6 @@ final class CloudSync {
             }
             if merged != remote { write(merged, key) }
         }
-    }
-
-    // MARK: - Scan results
-
-    /// What another of the user's devices found when it scanned this exact audio file.
-    func sharedScan(forAudio key: String) -> SharedScan? {
-        let scans: [String: SharedScan] = read("scans") ?? [:]
-        return scans[key]
-    }
-
-    /// Publishes a finished scan so the user's other devices needn't repeat it.
-    func shareScan(_ scan: SharedScan, forAudio key: String) {
-        var scans: [String: SharedScan] = read("scans") ?? [:]
-        scans[key] = scan
-        // The key-value store is small; keep only recent scans.
-        if scans.count > 150 {
-            let newest = scans.sorted { $0.value.savedAt > $1.value.savedAt }.prefix(150)
-            scans = Dictionary(uniqueKeysWithValues: newest.map { ($0.key, $0.value) })
-        }
-        write(scans, "scans")
     }
 
     // MARK: - Storage

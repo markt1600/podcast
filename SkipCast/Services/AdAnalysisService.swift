@@ -2,7 +2,6 @@ import Foundation
 import SwiftData
 import Observation
 import PodcastCore
-import CryptoKit
 
 /// Works out where the ads and the intro are in an episode.
 ///
@@ -29,9 +28,6 @@ final class AdAnalysisService {
     @ObservationIgnored private var queue: [Episode] = []
     @ObservationIgnored private var worker: Task<Void, Never>?
     @ObservationIgnored private var priorityUID: String?
-    /// Looks up, and publishes, scan results shared between the user's devices.
-    @ObservationIgnored var sharedScan: ((String) -> SharedScan?)?
-    @ObservationIgnored var shareScan: ((SharedScan, String) -> Void)?
 
     init(context: ModelContext) {
         self.context = context
@@ -149,23 +145,6 @@ final class AdAnalysisService {
         var note: String?
         var fileSpecific = false
 
-        // Another of the user's devices may already have scanned this very file.
-        // Inserted ads make downloads differ, so the match is on the audio itself.
-        var audioKey: String?
-        if let file = episode.localFileURL {
-            audioKey = await Task.detached(priority: .utility) { Self.audioKey(for: file) }.value
-            if let audioKey, let shared = sharedScan?(audioKey), !episode.isDeleted {
-                episode.adSegments = shared.segments
-                episode.contentStart = shared.contentStart
-                episode.analysisIsFileSpecific = true
-                episode.analysisState = .done
-                episode.analysisNote = "Scanned on another of your devices."
-                episode.podcast?.recordScan(foundAds: shared.segments.contains { $0.kind == .ad })
-                try? context.save()
-                return
-            }
-        }
-
         if let file = episode.localFileURL {
             do {
                 // Pick up where an interrupted scan of this episode left off.
@@ -246,10 +225,6 @@ final class AdAnalysisService {
         }
         episode.analysisIsFileSpecific = fileSpecific
         episode.analysisState = .done
-        if fileSpecific, let audioKey {
-            shareScan?(SharedScan(segments: analysis.segments, contentStart: analysis.contentStart,
-                                  savedAt: Date.now.timeIntervalSince1970), audioKey)
-        }
         episode.analysisNote = fileSpecific ? nil : (note ?? "From the publisher’s notes. Download the episode for exact timing.")
         try? context.save()
     }
@@ -269,25 +244,6 @@ final class AdAnalysisService {
             episode.adSegments = analysis.segments
             episode.contentStart = analysis.contentStart
         }
-    }
-
-    /// Identifies an audio file by its size and samples of its content, cheaply
-    /// enough to run on every download. Two downloads of an episode with
-    /// different inserted ads get different keys.
-    nonisolated static func audioKey(for url: URL) -> String? {
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
-        defer { try? handle.close() }
-        guard let size = try? handle.seekToEnd(), size > 0 else { return nil }
-        var hasher = SHA256()
-        hasher.update(data: Data("\(size)".utf8))
-        let sample: UInt64 = 1 << 20
-        // Start, middle and end: wherever an ad was inserted, at least the size or
-        // one of these moves.
-        for offset in Set([0, size / 2, size > sample ? size - sample : 0]).sorted() {
-            guard (try? handle.seek(toOffset: offset)) != nil, let data = try? handle.read(upToCount: Int(sample)) else { continue }
-            hasher.update(data: data)
-        }
-        return hasher.finalize().prefix(12).map { String(format: "%02x", $0) }.joined()
     }
 
     /// Fingerprints of recently analysed episodes. Sponsor reads and intros
