@@ -242,6 +242,7 @@ final class AdDetectorTests: XCTestCase {
     func testAnalyzerUsesShowNotesAlone() {
         var evidence = EpisodeEvidence()
         evidence.duration = 2344
+        evidence.episodeTitle = "Essentials: How Emotions Impact Learning | Dr. Mary Helen Immordino-Yang"
         evidence.showNotes = """
         Thank you to our sponsors
         (00:00:00) Mary Helen Immordino-Yang
@@ -262,6 +263,13 @@ final class AdDetectorTests: XCTestCase {
         let split = "00:00\nIntro\n01:44\nSecond\n04:48\nThird"
         XCTAssertEqual(ShowNotes.chapters(from: split).map(\.title), ["Intro", "Second", "Third"])
         XCTAssertTrue(ShowNotes.chapters(from: "We met at 10:30 and talked until 9:15.").isEmpty)
+        let trailing = "Why labs fall short [2:15];\nDefining health [5:45];\nA practical framework [53:30]; and"
+        XCTAssertEqual(ShowNotes.chapters(from: trailing).map(\.start), [135, 345, 3210])
+        XCTAssertEqual(ShowNotes.chapters(from: trailing).first?.title, "Why labs fall short")
+        // A first entry that is a topic, not an intro, must not be skipped.
+        XCTAssertTrue(IntroDetector.isIntroChapter("Intro", episodeTitle: ""))
+        XCTAssertTrue(IntroDetector.isIntroChapter("Paul Stamets", episodeTitle: "Mushrooms for the Mind | Paul Stamets"))
+        XCTAssertFalse(IntroDetector.isIntroChapter("Why sleep matters", episodeTitle: "Sleep | Dr. Someone"))
     }
 
     func testRepeatedReadIsFoundWithoutAnyAdLanguage() {
@@ -352,6 +360,35 @@ final class AdDetectorTests: XCTestCase {
         XCTAssertEqual(segments.count, 1, "\(segments)")
         XCTAssertEqual(segments.first?.kind, .boilerplate)
         XCTAssertEqual(segments.first?.start ?? -1, 0, accuracy: 1)
+    }
+
+    func testCommonWordInSponsorDomainDoesNotDragTheStartBack() {
+        // "from our place .com": the word "place" earlier in the conversation is not the sponsor.
+        let question = "I am a researcher in Japan and this place has changed how my students think about work."
+        let read = """
+        I cook most nights with a pan from today's sponsor, Our Place. \(content) Visit from our place .com slash pod \
+        and use code POD for 10% off. That's from our place .com slash pod.
+        """
+        let transcript = words(question + " " + content + ".", from: 0) + words(read, from: 100)
+        let found = AdDetector().detect(in: transcript)
+        XCTAssertEqual(found.count, 1, "\(found)")
+        XCTAssertEqual(found.first?.start ?? -1, 100, accuracy: 1)
+    }
+
+    func testHouseURLIsNotASponsor() {
+        let plug = """
+        I wanted to tell you about it. If you go to tim.blog/oryx you can still sign up for the wait list. \
+        There are not many spots and I was skeptical at first but the team has been great to work with and I think \
+        a lot of you would get real value from trying it for a few weeks. \
+        Again, go to tim.blog/oryx and check it out. \(content)
+        """
+        let transcript = words(content + ".", from: 0) + words(plug, from: 100)
+        var detector = AdDetector()
+        detector.options.showName = "The Tim Ferriss Show Tim Ferriss"
+        XCTAssertTrue(detector.detect(in: transcript).isEmpty)
+        // The same wording for somebody else's site is a sponsor read.
+        let sponsor = plug.replacingOccurrences(of: "tim.blog", with: "zorblat.com")
+        XCTAssertEqual(detector.detect(in: words(content + ".", from: 0) + words(sponsor, from: 100)).count, 1)
     }
 
     func testIntroHandoff() {

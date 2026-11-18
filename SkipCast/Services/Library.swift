@@ -54,6 +54,19 @@ final class Library {
         return podcast
     }
 
+    /// On first launch, subscribes to the starter shows.
+    func addStarterShowsIfNeeded() async {
+        let key = "starterShowsAdded"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        // Mark first: an unsubscribed starter show must not come back on the next launch.
+        UserDefaults.standard.set(true, forKey: key)
+        isRefreshing = true
+        defer { isRefreshing = false }
+        for show in StarterShows.all {
+            _ = try? await subscribe(feedURL: show.feedURL, directoryEntry: show)
+        }
+    }
+
     func unsubscribe(_ podcast: Podcast) {
         for episode in podcast.episodes {
             downloads.removeDownload(for: episode)

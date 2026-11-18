@@ -63,6 +63,8 @@ evidence.duration = input.duration
 if let feedPath {
     let feed = try RSSParser.parse(Data(contentsOf: URL(fileURLWithPath: feedPath)))
     evidence.showNotes = feed.episodes[itemIndex].summary
+    evidence.showName = feed.title + " " + feed.author
+    evidence.episodeTitle = feed.episodes[itemIndex].title
     print("show notes index: \(ShowNotes.chapters(from: evidence.showNotes).count) entries")
 }
 for reference in references {
@@ -75,7 +77,9 @@ func text(from start: Double, to end: Double) -> String {
 
 print("== \(input.title ?? path) (\(clock(input.duration ?? 0)))")
 if showCues {
-    for line in AdDetector().debugCues(input.segments) { print(line) }
+    var detector = AdDetector()
+    detector.options.showName = evidence.showName
+    for line in detector.debugCues(input.segments) { print(line) }
 }
 
 let analysis = EpisodeAnalyzer().analyze(evidence)

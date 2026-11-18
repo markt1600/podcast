@@ -37,6 +37,7 @@ final class AppModel {
         }
         player.onWillPlay = { [unowned self] episode in
             analysis.quickScan(episode)
+            if settings.autoAnalyze { analysis.prioritize(episode) }
         }
         player.onFinished = { [unowned self] episode in
             library.markPlayed(episode, played: true)
@@ -69,7 +70,10 @@ struct SkipCastApp: App {
                 .environment(model.player)
                 .environment(model.analysis)
                 .tint(.orange)
-                .task { await model.library.refreshAll() }
+                .task {
+                    await model.library.addStarterShowsIfNeeded()
+                    await model.library.refreshAll()
+                }
         }
         .modelContainer(model.container)
         .onChange(of: scenePhase) { _, phase in

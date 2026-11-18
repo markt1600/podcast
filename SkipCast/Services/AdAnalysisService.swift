@@ -19,6 +19,7 @@ final class AdAnalysisService {
     private(set) var progress: [String: Double] = [:]
     @ObservationIgnored private var queue: [Episode] = []
     @ObservationIgnored private var worker: Task<Void, Never>?
+    @ObservationIgnored private var priorityUID: String?
 
     init(context: ModelContext) {
         self.context = context
@@ -27,16 +28,28 @@ final class AdAnalysisService {
     /// Instant pass over show notes. Safe to call repeatedly.
     func quickScan(_ episode: Episode) {
         guard episode.analysisState == .none else { return }
-        var evidence = EpisodeEvidence()
-        evidence.showNotes = episode.summary
-        evidence.duration = episode.duration > 0 ? episode.duration : nil
-        let analysis = EpisodeAnalyzer().analyze(evidence)
+        let analysis = EpisodeAnalyzer().analyze(baseEvidence(for: episode))
         guard !analysis.segments.isEmpty || analysis.contentStart != nil else { return }
         episode.adSegments = analysis.segments
         episode.contentStart = analysis.contentStart
         episode.analysisIsFileSpecific = false
         episode.analysisState = .done
         episode.analysisNote = "From the show notes. Download the episode for exact timing."
+    }
+
+    private func baseEvidence(for episode: Episode) -> EpisodeEvidence {
+        var evidence = EpisodeEvidence()
+        evidence.showNotes = episode.summary
+        evidence.duration = episode.duration > 0 ? episode.duration : nil
+        evidence.episodeTitle = episode.title
+        evidence.showName = [episode.podcast?.title, episode.podcast?.author].compactMap { $0 }.joined(separator: " ")
+        return evidence
+    }
+
+    /// Moves an episode to the front of the scan queue (it is about to be played).
+    func prioritize(_ episode: Episode) {
+        priorityUID = episode.uid
+        if episode.downloadState == .downloaded { enqueue(episode) }
     }
 
     /// Queues a full scan of a downloaded episode.
@@ -70,7 +83,11 @@ final class AdAnalysisService {
         worker = Task {
             // One at a time: transcription is CPU heavy.
             while !queue.isEmpty {
-                let episode = queue.removeFirst()
+                // The episode being played first, then newest first: with a big
+                // backlog those are the ones most likely to be listened to next.
+                let index = queue.firstIndex { $0.uid == priorityUID }
+                    ?? queue.indices.max { queue[$0].pubDate < queue[$1].pubDate } ?? 0
+                let episode = queue.remove(at: index)
                 guard !episode.isDeleted else { continue }
                 await analyze(episode)
             }
@@ -82,9 +99,7 @@ final class AdAnalysisService {
         let hadQuickResult = episode.analysisState == .done
         if !hadQuickResult { episode.analysisState = .analyzing }
         let uid = episode.uid
-        var evidence = EpisodeEvidence()
-        evidence.showNotes = episode.summary
-        evidence.duration = episode.duration > 0 ? episode.duration : nil
+        var evidence = baseEvidence(for: episode)
         var note: String?
         var fileSpecific = false
 

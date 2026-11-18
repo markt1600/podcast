@@ -8,16 +8,28 @@ public struct IntroDetector: Sendable {
 
     public init() {}
 
-    public func contentStart(in segments: [TranscriptSegment], ads: [AdSegment], chapters: [Chapter] = []) -> TimeInterval? {
-        contentStart(in: WordTrack(segments), ads: ads, chapters: chapters)
+    public func contentStart(in segments: [TranscriptSegment], ads: [AdSegment], chapters: [Chapter] = [],
+                             episodeTitle: String = "") -> TimeInterval? {
+        contentStart(in: WordTrack(segments), ads: ads, chapters: chapters, episodeTitle: episodeTitle)
     }
 
-    func contentStart(in track: WordTrack, ads: [AdSegment], chapters: [Chapter]) -> TimeInterval? {
+    /// The first entry of a show-notes index is an intro if it says so, or if
+    /// it is just the guest's name (as in the episode title) rather than a topic.
+    static func isIntroChapter(_ title: String, episodeTitle: String) -> Bool {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return true }
+        if trimmed.range(of: #"\b(intro\w*|start|welcome|opening|open|preview|teaser|trailer|coming up|housekeeping)\b"#,
+                         options: [.regularExpression, .caseInsensitive]) != nil { return true }
+        return trimmed.count >= 4 && episodeTitle.range(of: trimmed, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+    }
+
+    func contentStart(in track: WordTrack, ads: [AdSegment], chapters: [Chapter], episodeTitle: String) -> TimeInterval? {
         var candidates: [TimeInterval] = []
 
         // Show notes: when the index opens at 0:00, its second entry is the first real topic.
         let sorted = chapters.sorted { $0.start < $1.start }
-        if sorted.count >= 2, sorted[0].start <= 1, sorted[1].start >= 10, sorted[1].start <= maximumIntro {
+        if sorted.count >= 2, sorted[0].start <= 1, sorted[1].start >= 10, sorted[1].start <= maximumIntro,
+           Self.isIntroChapter(sorted[0].title, episodeTitle: episodeTitle) {
             candidates.append(sorted[1].start)
         }
 
@@ -46,7 +58,7 @@ public struct IntroDetector: Sendable {
 
     private static let handoffs = try! NSRegularExpression(pattern: [
         #"\bplease enjoy\b"#,
-        #"\bwithout further ado\b"#,
+        #"\bwithout (any )?further (ado|delay)\b"#,
         #"\band now (for )?(my|our|the) (discussion|conversation|interview|chat)\b"#,
         #"\bhere'?s? (is )?(my|our) (discussion|conversation|interview|chat) with\b"#,
         #"\blet's (get started|get into it|dive in|jump in|get to it)\b"#,

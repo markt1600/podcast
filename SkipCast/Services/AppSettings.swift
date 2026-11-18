@@ -25,7 +25,7 @@ final class AppSettings {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         defaults.register(defaults: [
-            "skipAds": true, "skipIntros": false, "playbackSpeed": 1.0, "keepCount": 3, "autoDownload": true,
+            "skipAds": true, "skipIntros": false, "playbackSpeed": 1.0, "keepCount": 10, "autoDownload": true,
             "autoDeletePlayed": true, "autoAnalyze": true, "downloadOnCellular": false, "minimumAdConfidence": 0.5,
         ])
         skipAds = defaults.bool(forKey: "skipAds")

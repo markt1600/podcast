@@ -12,6 +12,9 @@ public struct EpisodeEvidence: Sendable {
     /// Chapters from a `podcast:chapters` file.
     public var chapters: [Chapter] = []
     public var duration: TimeInterval?
+    /// Show title and author; used to tell house plugs from sponsor reads.
+    public var showName = ""
+    public var episodeTitle = ""
     /// Fingerprints of other analysed episodes, for spotting recurring reads.
     public var reference: Set<UInt64> = []
 
@@ -33,6 +36,8 @@ public struct EpisodeAnalyzer: Sendable {
     public init() {}
 
     public func analyze(_ evidence: EpisodeEvidence) -> EpisodeAnalysis {
+        var detector = detector
+        if detector.options.showName.isEmpty { detector.options.showName = evidence.showName }
         let track = WordTrack(evidence.transcript)
         let chapters = (evidence.chapters + ShowNotes.chapters(from: evidence.showNotes)).sorted { $0.start < $1.start }
 
@@ -43,7 +48,7 @@ public struct EpisodeAnalyzer: Sendable {
         var segments = AdDetector.reconcile(measured: spoken, approximate: listed)
 
         // 2. Verbatim repeats.
-        let cues = AdDetector.findCues(in: track).filter { $0.weight >= 3 }
+        let cues = detector.cues(in: track).filter { $0.weight >= 3 }
         for found in RepetitionDetector.repeats(in: track, reference: evidence.reference) {
             let range = found.range
             if let index = segments.firstIndex(where: { $0.kind == .ad && $0.start < range.upperBound && $0.end > range.lowerBound }) {
@@ -74,7 +79,8 @@ public struct EpisodeAnalyzer: Sendable {
         }
         segments = AdDetector.merge(segments)
 
-        let contentStart = IntroDetector().contentStart(in: track, ads: segments, chapters: chapters)
+        let contentStart = IntroDetector().contentStart(in: track, ads: segments, chapters: chapters,
+                                                        episodeTitle: evidence.episodeTitle)
         return EpisodeAnalysis(segments: segments, contentStart: contentStart,
                                fingerprint: RepetitionDetector.fingerprint(of: track))
     }

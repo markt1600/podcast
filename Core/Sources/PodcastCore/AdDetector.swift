@@ -28,6 +28,10 @@ public struct AdDetector: Sendable {
         public var minimumDuration: TimeInterval = 12
         /// Longer detections are implausible and discarded.
         public var maximumDuration: TimeInterval = 600
+        /// The show's own name and host, e.g. "The Tim Ferriss Show Tim Ferriss".
+        /// Web addresses on the show's own site (newsletter, show notes, the
+        /// host's side projects) are house plugs, not sponsor reads.
+        public var showName = ""
 
         public init() {}
     }
@@ -45,7 +49,7 @@ public struct AdDetector: Sendable {
     }
 
     func detect(in track: WordTrack) -> [AdSegment] {
-        let cues = Self.findCues(in: track)
+        let cues = cues(in: track)
         let strong = cues.filter { $0.weight >= 3 }
         guard !strong.isEmpty else { return [] }
 
@@ -80,9 +84,13 @@ public struct AdDetector: Sendable {
             if let trailing = support.map(\.last).max(), trailing > lastWord { lastWord = trailing }
 
             // Pull the start back to the sentence, then to the sponsor's first mention.
+            // A read that opens by naming its sponsor starts right there. One that
+            // opens with a story only reveals itself at the URL, so look back for
+            // where the sponsor was first mentioned.
+            let opensWithAttribution = group.first!.label == "sponsor attribution"
             firstWord = track.sentenceStart(before: firstWord)
             let brands = Set((group + support).compactMap(\.brand))
-            if !brands.isEmpty {
+            if !brands.isEmpty, !opensWithAttribution {
                 let earliest = max(track.words[firstWord].start - options.brandLookback, previousEnd)
                 let brandWords = Self.brandWords(for: brands, in: track, near: urlCues)
                 var index = track.wordIndex(atTime: earliest)
@@ -229,6 +237,10 @@ public struct AdDetector: Sendable {
         Pattern("sponsor attribution", 4, #"\bsupport for (this|the|today's) (show|podcast|episode|program)\b"#),
         Pattern("sponsor attribution", 4, #"\b(our|today's|this episode'?s?|this week's|the) sponsors?\b"#),
         Pattern("sponsor attribution", 4, #"\b(thank|thanks|thanking) (again )?(to )?.{0,40}for sponsoring\b"#),
+        // Public-radio and network style: "This message comes from…"
+        Pattern("sponsor attribution", 4, #"\b(this|the following) message (comes|is|come) from\b"#),
+        Pattern("sponsor attribution", 4, #"\bsupport for (npr|this station|the show) \w* ?(and the following message )?(comes?|is provided) (from|by)\b"#),
+        Pattern("sponsor attribution", 4, #"\band the following message comes? from\b"#),
         // Promo codes
         Pattern("promo code", 4, #"\b(promo|offer|discount|coupon) code\b"#),
         Pattern("promo code", 4, #"\b(use|enter|with) (the )?code\b"#),
@@ -249,6 +261,31 @@ public struct AdDetector: Sendable {
         Pattern("call to action", 1, #"\b(sign up|get started|learn more|download the app|check it out|link in the (show notes|description))\b"#),
         Pattern("call to action", 1, #"\b(our|for) listeners\b"#),
     ]
+
+    /// Cues with the show's own web addresses demoted to weak evidence.
+    func cues(in track: WordTrack) -> [Cue] {
+        let house = Self.squeeze(options.showName)
+        return Self.findCues(in: track).map { cue in
+            guard let brand = cue.brand, cue.weight >= 3, !house.isEmpty else { return cue }
+            let parts = brand.split(separator: "|").map { Self.squeeze(String($0)) }
+            let isHouse = house.contains(parts.joined()) || (parts.last.map { $0.count >= 3 && house.contains($0) } ?? false)
+            guard isHouse else { return cue }
+            var cue = cue
+            cue.weight = 1.5
+            cue.label = "website"
+            return cue
+        }
+    }
+
+    /// Letters and digits only, with doubled letters collapsed, so that a
+    /// recogniser's "peteratia" still matches "Peter Attia".
+    static func squeeze(_ text: String) -> String {
+        var result = ""
+        for character in text.lowercased() where character.isLetter || character.isNumber {
+            if result.last != character { result.append(character) }
+        }
+        return result
+    }
 
     static func findCues(in track: WordTrack) -> [Cue] {
         guard !track.words.isEmpty else { return [] }
@@ -287,19 +324,31 @@ public struct AdDetector: Sendable {
     /// the sponsor's domain and must not be a word the episode uses freely
     /// elsewhere (so "sleep" doesn't count as a brand in an episode about sleep).
     static func brandWords(for brands: Set<String>, in track: WordTrack, near urlCues: [Cue]) -> Set<String> {
+        // The pattern captures up to two words before the TLD, because recognisers
+        // split names ("helix sleep .com"). Often the first is just the word before
+        // the address ("at fin .ai"), in which case the name is the second alone.
+        // For a real two-word name, the host may say it joined or by its first
+        // word ("helix"); its last word alone ("sleep", "place", "one") is ordinary
+        // vocabulary unless it is long enough to be distinctive ("momentous").
         var names = Set<String>()
+        var singleWordNames = Set<String>()
         for brand in brands {
             let parts = brand.split(separator: "|").map(String.init)
-            names.insert(parts.joined())
-            if let last = parts.last { names.insert(last) }
+            if parts.count == 2, !leadInWords.contains(parts[0]) {
+                names.insert(parts.joined())
+                if parts[1].count >= 7 { singleWordNames.insert(parts[1]) }
+            } else if let last = parts.last {
+                singleWordNames.insert(last)
+            }
         }
+        names.formUnion(singleWordNames)
         let adTimes = urlCues.map { track.words[$0.first].start }
         var counts: [String: Int] = [:]
         var candidates = Set<String>()
         for word in track.words where word.norm.count >= 3 {
             let norm = bare(word.norm)
-            guard names.contains(where: { $0 == norm || ($0.hasPrefix(norm) && norm.count >= 3)
-                    || ($0.hasSuffix(norm) && norm.count >= 5) }) else { continue }
+            guard names.contains(where: { $0 == norm || ($0.hasPrefix(norm) && norm.count >= 4) })
+                    || singleWordNames.contains(where: { $0.hasSuffix(norm) && norm.count >= 5 }) else { continue }
             candidates.insert(norm)
             // Mentions right around a sponsor URL are the ad itself, not general usage.
             if !adTimes.contains(where: { word.start > $0 - 180 && word.start < $0 + 30 }) {
@@ -314,6 +363,12 @@ public struct AdDetector: Sendable {
         norm.hasSuffix("'s") ? String(norm.dropLast(2)) : norm
     }
 
+    /// Words that precede a spoken web address without being part of it.
+    static let leadInWords: Set<String> = [
+        "at", "to", "visit", "go", "is", "that's", "s", "in", "on", "the", "a", "and", "of", "by", "with", "check",
+        "out", "via", "time", "just", "again", "try", "com", "it's", "called", "website", "site", "or", "online",
+    ]
+
     static let commonWords: Set<String> = [
         "the", "get", "try", "use", "join", "with", "shop", "drink", "eat", "meet", "hello", "buy", "visit", "www",
         "http", "https", "you", "your", "for", "and", "that", "this", "now", "today", "one", "two", "go", "my",
@@ -322,7 +377,7 @@ public struct AdDetector: Sendable {
     /// One line per cue, for tuning against real transcripts.
     public func debugCues(_ segments: [TranscriptSegment]) -> [String] {
         let track = WordTrack(segments)
-        return Self.findCues(in: track).filter { $0.weight >= 1.5 }.map { cue in
+        return cues(in: track).filter { $0.weight >= 1.5 }.map { cue in
             let words = track.words[max(0, cue.first - 4)...min(track.words.count - 1, cue.last + 4)].map(\.norm)
             return String(format: "%6.0f %3.1f %@ | %@", track.words[cue.first].start, cue.weight,
                           cue.label + (cue.brand.map { " <\($0)>" } ?? ""), words.joined(separator: " "))
