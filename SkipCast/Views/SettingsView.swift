@@ -4,6 +4,7 @@ import SwiftData
 struct SettingsView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(DownloadManager.self) private var downloads
+    @Environment(CloudSync.self) private var sync
     @Query(filter: #Predicate<Episode> { $0.downloadStateRaw == 2 }) private var downloaded: [Episode]
     @State private var confirmingDelete = false
 
@@ -26,10 +27,14 @@ struct SettingsView: View {
                     Text("Ads are found by reading the show notes and by listening to downloaded episodes on this device. Nothing is uploaded. Every skip can be undone from the player, and a skipped section is always marked on the progress bar.")
                 }
 
-                Section("Playback") {
+                Section {
                     Picker("Default speed", selection: $settings.playbackSpeed) {
                         ForEach(AppSettings.speeds, id: \.self) { Text(Format.speed($0)).tag($0) }
                     }
+                } header: {
+                    Text("Playback")
+                } footer: {
+                    Text("Changing speed in the player is remembered for that show. Shows you haven’t set play at the default.")
                 }
 
                 Section {
@@ -41,6 +46,19 @@ struct SettingsView: View {
                     Toggle("Delete episodes after playing", isOn: $settings.autoDeletePlayed)
                 } header: {
                     Text("Downloads")
+                } footer: {
+                    Text("A newly added show starts with its \(AppSettings.firstSyncCount) newest episodes, downloaded over Wi-Fi only. After that, new episodes download as they are published.")
+                }
+
+                Section {
+                    LabeledContent("iCloud", value: sync.isAvailable ? "On" : "Not signed in")
+                    if let date = sync.lastSync {
+                        LabeledContent("Last synced", value: date.formatted(.relative(presentation: .named)))
+                    }
+                } header: {
+                    Text("Sync")
+                } footer: {
+                    Text("Subscriptions, per-show settings and where you are in each episode are shared with your other devices through iCloud.")
                 }
 
                 Section {

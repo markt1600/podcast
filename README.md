@@ -19,6 +19,27 @@ You need a Mac with Xcode 16 or later.
 The first time an episode is scanned, iOS asks for Speech Recognition
 permission. Scanning happens on the device; audio is never uploaded.
 
+## Downloads, speed, sync and CarPlay
+
+- **First sync.** A newly added show downloads its 3 newest episodes, over
+  Wi-Fi only. After that, new episodes download as they are published (over
+  mobile data too, unless you turn that off), keeping up to the number set in
+  Settings.
+- **Per-show speed.** Changing speed in the player is remembered for that
+  show. Shows without their own speed use the default from Settings.
+- **iCloud sync.** Subscriptions, per-show settings and your position in each
+  episode sync between devices. This needs the iCloud capability, which Apple
+  only allows on a paid Apple Developer account: in Xcode, select the target →
+  *Signing & Capabilities* → **+ Capability** → **iCloud** → tick **Key-value
+  storage**. Without it the app works normally and simply doesn't sync.
+- **CarPlay.** The app has CarPlay screens (Up Next, Shows, Now Playing with a
+  speed button). They appear in the CarPlay Simulator out of the box. For a
+  real car, Apple must grant your developer account the CarPlay audio
+  entitlement (requested at developer.apple.com/contact/carplay); once granted,
+  set `CODE_SIGN_ENTITLEMENTS` to `Config/CarPlay.entitlements` for device
+  builds. Without it, audio still plays in the car and the car's Now Playing
+  controls work; the app just has no icon on the CarPlay screen.
+
 ## How ads are found
 
 Feeds don't mark where ads are, so SkipCast combines several sources of

@@ -13,6 +13,8 @@ final class Library {
 
     private(set) var isRefreshing = false
     var lastError: String?
+    /// Called after subscriptions, show settings or play state change, so they can be synced.
+    @ObservationIgnored var onChange: (() -> Void)?
 
     init(context: ModelContext, settings: AppSettings, downloads: DownloadManager) {
         self.context = context
@@ -50,7 +52,14 @@ final class Library {
         context.insert(podcast)
         await merge(feed, into: podcast)
         try? context.save()
-        autoDownload(for: podcast)
+        SyncTombstones.remove(feedURL)
+        // First sync of a show: just the newest few, and only over Wi-Fi.
+        if settings.autoDownload {
+            for episode in podcast.sortedEpisodes.prefix(AppSettings.firstSyncCount) {
+                downloads.download(episode, automatic: true, wifiOnly: true)
+            }
+        }
+        onChange?()
         return podcast
     }
 
@@ -63,24 +72,31 @@ final class Library {
         isRefreshing = true
         defer { isRefreshing = false }
         for show in StarterShows.all {
-            _ = try? await subscribe(feedURL: show.feedURL, directoryEntry: show)
+            guard let podcast = try? await subscribe(feedURL: show.feedURL, directoryEntry: show) else { continue }
+            if let speed = StarterShows.speeds[show.id] { podcast.playbackSpeed = speed }
+            // Starter picks are only a default: anything already in iCloud from
+            // another device (including having removed one) takes precedence.
+            podcast.syncUpdatedAt = Date(timeIntervalSince1970: 1)
         }
+        onChange?()
     }
 
     func unsubscribe(_ podcast: Podcast) {
         for episode in podcast.episodes {
             downloads.removeDownload(for: episode)
         }
+        SyncTombstones.add(podcast)
         context.delete(podcast)
         try? context.save()
+        onChange?()
     }
 
     func refresh(_ podcast: Podcast) async {
         do {
             let feed = try await DirectoryService.fetchFeed(podcast.feedURL)
-            await merge(feed, into: podcast)
+            let added = await merge(feed, into: podcast)
             try? context.save()
-            autoDownload(for: podcast)
+            autoDownload(added, for: podcast)
         } catch {
             lastError = "Couldn’t refresh \(podcast.title): \(error.localizedDescription)"
         }
@@ -95,7 +111,9 @@ final class Library {
         }
     }
 
-    private func merge(_ feed: ParsedFeed, into podcast: Podcast) async {
+    /// Returns the episodes that were not known before.
+    @discardableResult
+    private func merge(_ feed: ParsedFeed, into podcast: Podcast) async -> [Episode] {
         if let artwork = feed.artworkURL { podcast.artworkURL = artwork }
         if !feed.title.isEmpty { podcast.title = feed.title }
         podcast.lastRefreshed = .now
@@ -103,6 +121,7 @@ final class Library {
         var known: [String: Episode] = [:]
         for episode in podcast.episodes { known[episode.guid] = episode }
         var inserted = 0
+        var added: [Episode] = []
 
         for parsed in feed.episodes {
             let transcript = TranscriptParser.bestLink(from: parsed.transcripts)
@@ -132,27 +151,72 @@ final class Library {
             episode.podcast = podcast
             context.insert(episode)
             known[parsed.guid] = episode
+            added.append(episode)
             // A first import can be a thousand episodes; let the UI breathe.
             inserted += 1
             if inserted % 100 == 0 { await Task.yield() }
         }
+        return added
     }
 
-    /// Keeps the newest N unplayed episodes of a show on the device.
-    func autoDownload(for podcast: Podcast) {
-        guard settings.autoDownload, settings.keepCount > 0 else { return }
-        let wanted = podcast.sortedEpisodes.prefix(settings.keepCount).filter { !$0.isPlayed }
-        for episode in wanted where episode.downloadState == .none {
+    /// Downloads newly published episodes, and keeps a show from piling up
+    /// more than the chosen number of downloads.
+    private func autoDownload(_ added: [Episode], for podcast: Podcast) {
+        guard settings.autoDownload, settings.keepCount > 0, !added.isEmpty else { return }
+        let newest = Set(podcast.sortedEpisodes.prefix(settings.keepCount).map(\.uid))
+        for episode in added where newest.contains(episode.uid) && !episode.isPlayed {
             downloads.download(episode, automatic: true)
         }
+        // Make room: drop the oldest downloads that were never started.
+        let held = podcast.sortedEpisodes.filter { $0.downloadState != .none }
+        for episode in held.dropFirst(settings.keepCount) where episode.position == 0 {
+            downloads.removeDownload(for: episode)
+        }
+    }
+
+    /// Records a change to a show's own settings (speed, intro skip).
+    func showSettingsChanged(_ podcast: Podcast) {
+        podcast.syncUpdatedAt = .now
+        try? context.save()
+        onChange?()
     }
 
     func markPlayed(_ episode: Episode, played: Bool) {
         episode.isPlayed = played
+        episode.stateUpdatedAt = .now
         if played {
             episode.position = 0
             if settings.autoDeletePlayed { downloads.removeDownload(for: episode) }
         }
         try? context.save()
+        onChange?()
+    }
+}
+
+/// Subscriptions removed on this device, remembered so the removal can be
+/// passed on to the user's other devices.
+enum SyncTombstones {
+    private static let key = "syncRemovedShows"
+
+    static var all: [SyncedShow] {
+        guard let data = UserDefaults.standard.data(forKey: key) else { return [] }
+        return (try? JSONDecoder().decode([SyncedShow].self, from: data)) ?? []
+    }
+
+    static func set(_ shows: [SyncedShow]) {
+        UserDefaults.standard.set(try? JSONEncoder().encode(shows), forKey: key)
+    }
+
+    static func add(_ podcast: Podcast) {
+        let key = PodcastDiscovery.normalize(podcast.feedURL)
+        var shows = all.filter { URL(string: $0.feedURL).map(PodcastDiscovery.normalize) != key }
+        shows.append(SyncedShow(feedURL: podcast.feedURL.absoluteString, title: podcast.title, speed: podcast.playbackSpeed,
+                                introSkip: podcast.introSkipSeconds, updatedAt: Date.now.timeIntervalSince1970, removed: true))
+        set(shows)
+    }
+
+    static func remove(_ feedURL: URL) {
+        let key = PodcastDiscovery.normalize(feedURL)
+        set(all.filter { URL(string: $0.feedURL).map(PodcastDiscovery.normalize) != key })
     }
 }

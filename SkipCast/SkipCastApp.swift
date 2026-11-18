@@ -12,6 +12,7 @@ final class AppModel {
     let library: Library
     let player: PlayerEngine
     let analysis: AdAnalysisService
+    let sync: CloudSync
 
     static let shared = AppModel()
 
@@ -28,6 +29,7 @@ final class AppModel {
         library = Library(context: context, settings: settings, downloads: downloads)
         player = PlayerEngine(settings: settings)
         analysis = AdAnalysisService(context: context)
+        sync = CloudSync(context: context, library: library)
 
         downloads.onDownloaded = { [unowned self] episode in
             if settings.autoAnalyze { analysis.enqueue(episode) }
@@ -41,6 +43,18 @@ final class AppModel {
         }
         player.onFinished = { [unowned self] episode in
             library.markPlayed(episode, played: true)
+        }
+        player.onStateSaved = { [unowned self] in
+            sync.schedule()
+        }
+        player.onSpeedChanged = { [unowned self] podcast in
+            library.showSettingsChanged(podcast)
+        }
+        library.onChange = { [unowned self] in
+            sync.schedule()
+        }
+        sync.currentEpisodeUID = { [unowned self] in
+            player.episode?.uid
         }
         downloads.resume()
         analysis.resume()
@@ -69,15 +83,22 @@ struct SkipCastApp: App {
                 .environment(model.library)
                 .environment(model.player)
                 .environment(model.analysis)
+                .environment(model.sync)
                 .tint(.orange)
                 .task {
                     await model.library.addStarterShowsIfNeeded()
+                    await model.sync.syncNow()
                     await model.library.refreshAll()
                 }
         }
         .modelContainer(model.container)
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background { try? model.container.mainContext.save() }
+            if phase == .background {
+                try? model.container.mainContext.save()
+                Task { await model.sync.syncNow() }
+            } else if phase == .active {
+                model.sync.schedule(after: 1)
+            }
         }
     }
 }

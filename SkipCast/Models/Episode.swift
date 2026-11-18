@@ -35,6 +35,8 @@ final class Episode {
     var position: Double = 0
     var isPlayed: Bool = false
     var lastPlayedAt: Date?
+    /// When position or played state last changed on any device, for iCloud sync.
+    var stateUpdatedAt: Date?
 
     var downloadStateRaw: Int = 0
     var localFileName: String?

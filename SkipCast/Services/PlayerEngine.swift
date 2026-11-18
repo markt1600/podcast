@@ -41,6 +41,14 @@ final class PlayerEngine {
     @ObservationIgnored private var wantsToPlay = false
 
     @ObservationIgnored var onFinished: ((Episode) -> Void)?
+    /// Called when playback pauses or a show's speed changes, so state can be synced.
+    @ObservationIgnored var onStateSaved: (() -> Void)?
+    @ObservationIgnored var onSpeedChanged: ((Podcast) -> Void)?
+
+    /// Speed for what is playing: the show's own if it has one, else the default.
+    var speed: Double {
+        episode?.podcast?.playbackSpeed ?? settings.playbackSpeed
+    }
     @ObservationIgnored var onWillPlay: ((Episode) -> Void)?
 
     init(settings: AppSettings) {
@@ -131,14 +139,15 @@ final class PlayerEngine {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
         try? AVAudioSession.sharedInstance().setActive(true)
         wantsToPlay = true
-        player.defaultRate = Float(settings.playbackSpeed)
-        player.rate = Float(settings.playbackSpeed)
+        player.defaultRate = Float(speed)
+        player.rate = Float(speed)
     }
 
     func pause() {
         wantsToPlay = false
         player.pause()
         savePosition()
+        onStateSaved?()
     }
 
     func togglePlayPause() {
@@ -159,8 +168,14 @@ final class PlayerEngine {
         seek(to: currentTime + seconds)
     }
 
+    /// Changes speed and remembers it for this show.
     func setSpeed(_ speed: Double) {
-        settings.playbackSpeed = speed
+        if let podcast = episode?.podcast {
+            podcast.playbackSpeed = speed
+            onSpeedChanged?(podcast)
+        } else {
+            settings.playbackSpeed = speed
+        }
         player.defaultRate = Float(speed)
         if isPlaying { player.rate = Float(speed) }
         updateNowPlaying()
@@ -252,6 +267,7 @@ final class PlayerEngine {
     private func savePosition() {
         guard let episode, !episode.isDeleted else { return }
         episode.position = currentTime
+        episode.stateUpdatedAt = .now
         lastSave = .now
     }
 
@@ -285,8 +301,8 @@ final class PlayerEngine {
             MPMediaItemPropertyTitle: episode.title,
             MPMediaItemPropertyArtist: episode.podcast?.title ?? "",
             MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
-            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? settings.playbackSpeed : 0,
-            MPNowPlayingInfoPropertyDefaultPlaybackRate: settings.playbackSpeed,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? speed : 0,
+            MPNowPlayingInfoPropertyDefaultPlaybackRate: speed,
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
         ]
         if duration > 0 { info[MPMediaItemPropertyPlaybackDuration] = duration }

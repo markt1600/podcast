@@ -76,11 +76,11 @@ struct NowPlayingView: View {
 
                 HStack(spacing: 8) {
                     Menu {
-                        Picker("Speed", selection: Binding(get: { settings.playbackSpeed }, set: { player.setSpeed($0) })) {
+                        Picker("Speed for this show", selection: Binding(get: { player.speed }, set: { player.setSpeed($0) })) {
                             ForEach(AppSettings.speeds, id: \.self) { Text(Format.speed($0)).tag($0) }
                         }
                     } label: {
-                        Chip(text: Format.speed(settings.playbackSpeed), systemImage: "speedometer", active: settings.playbackSpeed != 1)
+                        Chip(text: Format.speed(player.speed), systemImage: "speedometer", active: player.speed != 1)
                     }
                     Button { settings.skipAds.toggle() } label: {
                         Chip(text: "Skip ads", systemImage: settings.skipAds ? "forward.end.fill" : "forward.end", active: settings.skipAds)

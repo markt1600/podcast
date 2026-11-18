@@ -14,6 +14,10 @@ final class Podcast {
     var lastRefreshed: Date?
     /// Manual "always skip the first N seconds" for this show; 0 = off.
     var introSkipSeconds: Double = 0
+    /// This show's own playback speed; nil plays it at the default speed.
+    var playbackSpeed: Double?
+    /// When the subscription or its settings last changed, for iCloud sync.
+    var syncUpdatedAt: Date = Date.now
 
     @Relationship(deleteRule: .cascade, inverse: \Episode.podcast)
     var episodes: [Episode] = []

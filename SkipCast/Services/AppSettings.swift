@@ -6,6 +6,9 @@ import Observation
 @Observable
 final class AppSettings {
     static let speeds: [Double] = [1.0, 1.25, 1.3, 1.4, 1.5, 1.75, 2.0]
+    /// Episodes downloaded when a show is first added. Deliberately small, so
+    /// a new subscription doesn't pull gigabytes or queue hours of scanning.
+    static let firstSyncCount = 3
 
     var skipAds: Bool { didSet { save(skipAds, "skipAds") } }
     var skipIntros: Bool { didSet { save(skipIntros, "skipIntros") } }

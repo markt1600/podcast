@@ -4,6 +4,7 @@ import SwiftData
 struct PodcastDetailView: View {
     @Bindable var podcast: Podcast
     @Environment(Library.self) private var library
+    @Environment(AppSettings.self) private var settings
     @Environment(\.dismiss) private var dismiss
     @State private var showingAll = false
     @State private var confirmingUnsubscribe = false
@@ -32,6 +33,13 @@ struct PodcastDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    Picker("Speed", selection: $podcast.playbackSpeed) {
+                        Text("Default (\(Format.speed(settings.playbackSpeed)))").tag(Double?.none)
+                        ForEach(AppSettings.speeds, id: \.self) { speed in
+                            Text(Format.speed(speed)).tag(Double?.some(speed))
+                        }
+                    }
+                    .pickerStyle(.menu)
                     Picker("Skip intro", selection: $podcast.introSkipSeconds) {
                         Text("Automatic").tag(0.0)
                         ForEach([15.0, 30, 45, 60, 90, 120, 180, 300], id: \.self) { seconds in
@@ -48,6 +56,8 @@ struct PodcastDetailView: View {
                 }
             }
         }
+        .onChange(of: podcast.playbackSpeed) { library.showSettingsChanged(podcast) }
+        .onChange(of: podcast.introSkipSeconds) { library.showSettingsChanged(podcast) }
         .confirmationDialog("Unsubscribe from \(podcast.title)?", isPresented: $confirmingUnsubscribe, titleVisibility: .visible) {
             Button("Unsubscribe", role: .destructive) {
                 library.unsubscribe(podcast)

@@ -50,10 +50,13 @@ final class DownloadManager: NSObject {
         }
     }
 
-    func download(_ episode: Episode, automatic: Bool = false) {
+    /// - Parameters:
+    ///   - automatic: started by the app rather than by a tap; honours the mobile-data setting.
+    ///   - wifiOnly: never use mobile data, whatever the setting (first sync of a show).
+    func download(_ episode: Episode, automatic: Bool = false, wifiOnly: Bool = false) {
         guard episode.downloadState == .none else { return }
         var request = URLRequest(url: episode.audioURL)
-        request.allowsCellularAccess = !automatic || settings.downloadOnCellular
+        request.allowsCellularAccess = !wifiOnly && (!automatic || settings.downloadOnCellular)
         let task = session.downloadTask(with: request)
         task.taskDescription = episode.uid
         episode.downloadState = .downloading

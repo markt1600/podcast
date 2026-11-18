@@ -15,6 +15,9 @@ enum StarterShows {
         show(1646101002, "The Mel Robbins Podcast", "Mel Robbins", "https://feeds.simplecast.com/UCwaTX1J", [1304, 1512]),
     ]
 
+    /// Shows that start with their own speed: music is no good sped up.
+    static let speeds: [Int: Double] = [1880097970: 1.0]
+
     private static func show(_ id: Int, _ title: String, _ author: String, _ feed: String, _ genres: [Int]) -> PodcastSearchResult {
         // The feed URLs are compile-time constants.
         PodcastSearchResult(id: id, title: title, author: author, feedURL: URL(string: feed)!, artworkURL: nil,
