@@ -34,8 +34,10 @@ permission. Scanning happens on the device; audio is never uploaded.
   setting (Automatic / Always scan / Never scan) to override this.
 - **Per-show speed.** Changing speed in the player is remembered for that
   show. Shows without their own speed use the default from Settings.
-- **iCloud sync.** Subscriptions, per-show settings and your position in each
-  episode sync between your devices. It is on by default and needs a paid
+- **iCloud sync.** Subscriptions, per-show settings, your position in each
+  episode and finished ad scans sync between your devices. (A scan is reused
+  only when the other device has exactly the same audio file; shows that
+  insert ads at download time can differ from one download to the next.) It is on by default and needs a paid
   Apple Developer team selected under *Signing & Capabilities* (Xcode adds the
   iCloud key-value capability to your App ID automatically). Each device must
   be signed in to the same iCloud account.

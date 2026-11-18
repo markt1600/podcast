@@ -56,6 +56,12 @@ final class AppModel {
         library.onChange = { [unowned self] in
             sync.schedule()
         }
+        analysis.sharedScan = { [unowned self] key in
+            sync.sharedScan(forAudio: key)
+        }
+        analysis.shareScan = { [unowned self] scan, key in
+            sync.shareScan(scan, forAudio: key)
+        }
         sync.currentEpisodeUID = { [unowned self] in
             player.episode?.uid
         }
