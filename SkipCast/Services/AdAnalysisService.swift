@@ -65,6 +65,16 @@ final class AdAnalysisService {
         if episode.downloadState == .downloaded { enqueue(episode) }
     }
 
+    /// Works out the intro again from what is already known about the episode
+    /// (its ad breaks and show notes), without listening to it. Lets episodes
+    /// scanned by an older version benefit from better intro rules.
+    func refreshIntro(_ episode: Episode) {
+        guard episode.contentStart == nil, episode.analysisState == .done else { return }
+        episode.contentStart = IntroDetector().contentStart(in: [], ads: episode.adSegments,
+                                                            chapters: ShowNotes.chapters(from: episode.summary),
+                                                            episodeTitle: episode.title)
+    }
+
     /// Queues a full scan of a downloaded episode.
     func enqueue(_ episode: Episode, force: Bool = false) {
         guard force || !episode.analysisIsFileSpecific || episode.analysisState != .done else { return }

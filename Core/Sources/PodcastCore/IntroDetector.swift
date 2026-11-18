@@ -5,6 +5,9 @@ import Foundation
 public struct IntroDetector: Sendable {
     /// Intros longer than this are not believed.
     public var maximumIntro: TimeInterval = 600
+    /// A first ad break starting within this time makes what precedes it a
+    /// cold open: a teaser before the break, with the show proper after it.
+    public var coldOpenLimit: TimeInterval = 150
 
     public init() {}
 
@@ -38,9 +41,11 @@ public struct IntroDetector: Sendable {
             candidates.append(handoff)
         }
 
-        // Recurring intro material and opening ads that run from the very top.
+        // Recurring intro material and opening ads: from the very top, or after a
+        // short cold open ("…let's hear from our sponsors, then we'll get into it").
         var cursor = 0.0
-        for segment in ads.sorted(by: { $0.start < $1.start }) where segment.start <= cursor + 20 && segment.end <= maximumIntro {
+        for segment in ads.sorted(by: { $0.start < $1.start })
+        where segment.start <= cursor + (cursor == 0 ? coldOpenLimit : 20) && segment.end <= maximumIntro {
             cursor = max(cursor, segment.end)
         }
         if cursor > 0 { candidates.append(cursor) }

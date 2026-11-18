@@ -75,6 +75,8 @@ struct ShowTile: View {
     let subtitle: String
     let artworkURL: URL?
     var badge: Int = 0
+    /// Shown before the subtitle, e.g. a tick when the newest episode is downloaded.
+    var subtitleSymbol: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -95,10 +97,16 @@ struct ShowTile: View {
                 .font(.footnote.weight(.semibold))
                 .lineLimit(1)
             if !subtitle.isEmpty {
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                HStack(spacing: 3) {
+                    if let subtitleSymbol {
+                        Image(systemName: subtitleSymbol)
+                            .foregroundStyle(.green)
+                    }
+                    Text(subtitle)
+                        .foregroundStyle(.secondary)
+                }
+                .font(.caption)
+                .lineLimit(1)
             }
         }
     }

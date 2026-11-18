@@ -28,8 +28,12 @@ struct LibraryView: View {
                         LazyVGrid(columns: columns, spacing: 16) {
                             ForEach(podcasts) { podcast in
                                 NavigationLink(value: podcast) {
-                                    ShowTile(title: podcast.title, subtitle: "", artworkURL: podcast.artworkURL,
-                                             badge: readyCounts[podcast.persistentModelID] ?? 0)
+                                    ShowTile(title: podcast.title,
+                                             subtitle: podcast.latestEpisodeDate.map(Format.date) ?? "",
+                                             artworkURL: podcast.artworkURL,
+                                             badge: readyCounts[podcast.persistentModelID] ?? 0,
+                                             subtitleSymbol: latestIsDownloaded(podcast) ? "arrow.down.circle.fill" : nil)
+                                        .accessibilityLabel(tileLabel(for: podcast))
                                 }
                                 .buttonStyle(.plain)
                                 .contextMenu {
@@ -64,6 +68,23 @@ struct LibraryView: View {
             if let id = episode.podcast?.persistentModelID { counts[id, default: 0] += 1 }
         }
         return counts
+    }
+
+    /// Whether the show's newest episode is on the device, ready to play.
+    private func latestIsDownloaded(_ podcast: Podcast) -> Bool {
+        guard let latest = podcast.latestEpisodeDate else { return false }
+        return upNext.contains {
+            $0.downloadState == .downloaded && $0.pubDate == latest
+                && $0.podcast?.persistentModelID == podcast.persistentModelID
+        }
+    }
+
+    private func tileLabel(for podcast: Podcast) -> String {
+        var parts = [podcast.title]
+        if let latest = podcast.latestEpisodeDate {
+            parts.append("latest episode \(Format.date(latest))" + (latestIsDownloaded(podcast) ? ", downloaded" : ""))
+        }
+        return parts.joined(separator: ", ")
     }
 
     private var upNextSection: some View {

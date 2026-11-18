@@ -188,6 +188,7 @@ final class Library {
             inserted += 1
             if inserted % 100 == 0 { await Task.yield() }
         }
+        podcast.latestEpisodeDate = known.values.map(\.pubDate).max()
         return added
     }
 

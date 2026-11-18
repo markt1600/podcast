@@ -60,6 +60,7 @@ final class AppModel {
         }
         player.onWillPlay = { [unowned self] episode in
             analysis.quickScan(episode)
+            analysis.refreshIntro(episode)
             if settings.autoAnalyze { analysis.prioritize(episode) }
         }
         player.onNotesMismatch = { [unowned self] episode in

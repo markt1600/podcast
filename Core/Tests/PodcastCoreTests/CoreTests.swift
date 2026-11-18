@@ -440,6 +440,13 @@ final class AdDetectorTests: XCTestCase {
         let start = IntroDetector().contentStart(in: transcript, ads: [])
         XCTAssertEqual(start ?? -1, 7, accuracy: 1.5)
         XCTAssertNil(IntroDetector().contentStart(in: words(content, from: 0), ads: []))
+
+        // A teaser, then an ad break a minute in: the episode starts after the break.
+        let earlyBreak = [AdSegment(start: 67, end: 204, confidence: 1, reason: "")]
+        XCTAssertEqual(IntroDetector().contentStart(in: [], ads: earlyBreak), 204)
+        // A break ten minutes in is a mid-roll; what comes before it is the episode.
+        let midroll = [AdSegment(start: 540, end: 690, confidence: 1, reason: "")]
+        XCTAssertNil(IntroDetector().contentStart(in: [], ads: midroll))
     }
 
     func testSkipPlanner() {

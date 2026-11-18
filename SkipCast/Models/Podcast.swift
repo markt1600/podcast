@@ -27,6 +27,9 @@ final class Podcast {
     var themeID: Int?
     var subscribedAt: Date
     var lastRefreshed: Date?
+    /// Publication date of the newest episode, kept here so the library can
+    /// show it without loading every episode.
+    var latestEpisodeDate: Date?
     /// Manual "always skip the first N seconds" for this show; 0 = off.
     var introSkipSeconds: Double = 0
     /// This show's own playback speed; nil plays it at the default speed.
