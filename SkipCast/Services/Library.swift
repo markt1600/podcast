@@ -48,7 +48,7 @@ final class Library {
             themeID: theme?.id
         )
         context.insert(podcast)
-        merge(feed, into: podcast)
+        await merge(feed, into: podcast)
         try? context.save()
         autoDownload(for: podcast)
         return podcast
@@ -78,7 +78,7 @@ final class Library {
     func refresh(_ podcast: Podcast) async {
         do {
             let feed = try await DirectoryService.fetchFeed(podcast.feedURL)
-            merge(feed, into: podcast)
+            await merge(feed, into: podcast)
             try? context.save()
             autoDownload(for: podcast)
         } catch {
@@ -95,13 +95,14 @@ final class Library {
         }
     }
 
-    private func merge(_ feed: ParsedFeed, into podcast: Podcast) {
+    private func merge(_ feed: ParsedFeed, into podcast: Podcast) async {
         if let artwork = feed.artworkURL { podcast.artworkURL = artwork }
         if !feed.title.isEmpty { podcast.title = feed.title }
         podcast.lastRefreshed = .now
 
         var known: [String: Episode] = [:]
         for episode in podcast.episodes { known[episode.guid] = episode }
+        var inserted = 0
 
         for parsed in feed.episodes {
             let transcript = TranscriptParser.bestLink(from: parsed.transcripts)
@@ -131,6 +132,9 @@ final class Library {
             episode.podcast = podcast
             context.insert(episode)
             known[parsed.guid] = episode
+            // A first import can be a thousand episodes; let the UI breathe.
+            inserted += 1
+            if inserted % 100 == 0 { await Task.yield() }
         }
     }
 

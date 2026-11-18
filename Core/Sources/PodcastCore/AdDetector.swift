@@ -24,6 +24,12 @@ public struct AdDetector: Sendable {
         public var minimumScore = 5.5
         /// How far before the first cue a sponsor's name may pull the start.
         public var brandLookback: TimeInterval = 150
+        /// A silence at least this long marks an edit point.
+        public var editPause: TimeInterval = 2.5
+        /// How far before a story-style read to look for its edit point.
+        public var pauseLookback: TimeInterval = 75
+        /// How far after the last cue to look for the closing edit point.
+        public var pauseLookahead: TimeInterval = 12
         /// Shorter detections are discarded as passing mentions.
         public var minimumDuration: TimeInterval = 12
         /// Longer detections are implausible and discarded.
@@ -76,7 +82,9 @@ public struct AdDetector: Sendable {
             // Weak cues count as supporting evidence when they sit inside the block,
             // and a trailing one ("…or head to acme.com") extends it.
             let support = cues.filter {
-                $0.weight < 3 && track.words[$0.first].start >= groupStart - 20 && track.words[$0.first].start <= groupEnd + 15
+                // A produced spot names its sponsor up front and its website half a minute later.
+                $0.weight < 3 && track.words[$0.first].start >= groupStart - 20
+                    && track.words[$0.first].start <= groupEnd + ($0.brand != nil ? 45 : 15)
             }
             let score = group.reduce(0) { $0 + $1.weight } + min(3, support.reduce(0) { $0 + $1.weight })
             let labels = Set(group.map(\.label) + support.map(\.label))
@@ -104,6 +112,30 @@ public struct AdDetector: Sendable {
                 }
             }
             lastWord = track.sentenceEnd(after: lastWord)
+
+            // Ad breaks are edited in, which leaves a beat of silence (or a music
+            // sting) at each edge. When one sits just outside what the words gave
+            // us, it is the real boundary: it recovers a story-style lead-in that
+            // has no advertising language, and a sign-off after the last URL.
+            if !opensWithAttribution {
+                let limit = max(track.words[firstWord].start - options.pauseLookback, previousEnd)
+                var index = firstWord
+                while index > 0, track.words[index - 1].end >= limit {
+                    if track.words[index].start - track.words[index - 1].end >= options.editPause {
+                        firstWord = index
+                        break
+                    }
+                    index -= 1
+                }
+            }
+            var index = lastWord
+            while index + 1 < track.words.count, track.words[index + 1].start - track.words[lastWord].end <= options.pauseLookahead {
+                if track.words[index + 1].start - track.words[index].end >= options.editPause {
+                    lastWord = index
+                    break
+                }
+                index += 1
+            }
 
             let start = max(track.words[firstWord].start, previousEnd)
             let end = track.words[lastWord].end
@@ -252,6 +284,8 @@ public struct AdDetector: Sendable {
         Pattern("discount offer", 3, #"\b(free trial|free shipping|free sample|money back guarantee|risk free|first (month|order|box|purchase|subscription)|limited time|special offer|exclusive (offer|deal|discount))\b"#),
         Pattern("discount offer", 3, #"\b(terms|restrictions|conditions) (and conditions )?apply\b"#),
         Pattern("call to action", 3, #"\b(tap|click) the (banner|link)\b"#),
+        Pattern("call to action", 3, #"\b(tell them|let them know) .{0,24}sent you\b"#),
+        Pattern("call to action", 3, #"\bwhere you heard about (them|us)\b"#),
         Pattern("discount offer", 3, #"\b(get|claim|grab) (your|a|an|my) (free|exclusive|special)\b"#),
         // Hosts repeat the address: "again, that's acme.com".
         Pattern("repeated URL", 3, "\\b(?:again|that's|that is|once more|one more time) (?:[a-z0-9-]+ ){0,3}?" + domain, brandGroup: 1),
@@ -266,13 +300,14 @@ public struct AdDetector: Sendable {
     func cues(in track: WordTrack) -> [Cue] {
         let house = Self.squeeze(options.showName)
         return Self.findCues(in: track).map { cue in
-            guard let brand = cue.brand, cue.weight >= 3, !house.isEmpty else { return cue }
+            guard let brand = cue.brand, !house.isEmpty else { return cue }
             let parts = brand.split(separator: "|").map { Self.squeeze(String($0)) }
             let isHouse = house.contains(parts.joined()) || (parts.last.map { $0.count >= 3 && house.contains($0) } ?? false)
             guard isHouse else { return cue }
             var cue = cue
-            cue.weight = 1.5
-            cue.label = "website"
+            cue.weight = 0.5
+            cue.label = "house website"
+            cue.brand = nil
             return cue
         }
     }

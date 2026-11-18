@@ -31,8 +31,4 @@ final class Podcast {
     var sortedEpisodes: [Episode] {
         episodes.sorted { $0.pubDate > $1.pubDate }
     }
-
-    var unplayedCount: Int {
-        episodes.reduce(0) { $0 + ($1.isPlayed ? 0 : 1) }
-    }
 }

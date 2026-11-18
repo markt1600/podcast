@@ -29,7 +29,7 @@ struct LibraryView: View {
                             ForEach(podcasts) { podcast in
                                 NavigationLink(value: podcast) {
                                     ShowTile(title: podcast.title, subtitle: "", artworkURL: podcast.artworkURL,
-                                             badge: podcast.unplayedCount)
+                                             badge: readyCounts[podcast.persistentModelID] ?? 0)
                                 }
                                 .buttonStyle(.plain)
                                 .contextMenu {
@@ -53,6 +53,17 @@ struct LibraryView: View {
                 }
             }
         }
+    }
+
+    /// Episodes ready to play (downloaded or in progress) per show, for the tile
+    /// badges. Derived from the Up Next query rather than walking every show's
+    /// full back catalogue on each redraw.
+    private var readyCounts: [PersistentIdentifier: Int] {
+        var counts: [PersistentIdentifier: Int] = [:]
+        for episode in upNext {
+            if let id = episode.podcast?.persistentModelID { counts[id, default: 0] += 1 }
+        }
+        return counts
     }
 
     private var upNextSection: some View {

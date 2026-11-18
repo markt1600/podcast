@@ -232,11 +232,18 @@ final class AdDetectorTests: XCTestCase {
         that answers customer questions for you. \(content) So check it out and learn more at zorblat.ai/show. \
         That's zorblat.ai/show.
         """
-        let transcript = words(content + ".", from: 0) + words(read, from: 100) + words(content, from: 240)
-        let found = AdDetector().detect(in: transcript)
+        // Read follows the conversation without a break: start at the sponsor's first mention.
+        let lead = words(content + ".", from: 0)
+        let readStart = lead.last!.end + 0.3
+        let continuous = lead + words(read, from: readStart) + words(content, from: readStart + 140)
+        var found = AdDetector().detect(in: continuous)
         XCTAssertEqual(found.count, 1, "\(found)")
-        // Starts at "This is where Zorblat comes in", ~4s into the read, not at the URL a minute later.
-        XCTAssertEqual(found.first?.start ?? -1, 104, accuracy: 2)
+        XCTAssertEqual(found.first?.start ?? -1, readStart + 4, accuracy: 2)
+
+        // Read edited in after a beat of silence: the silence is the true start,
+        // which also covers the lead-in sentence that never names the sponsor.
+        found = AdDetector().detect(in: lead + words(read, from: readStart + 4) + words(content, from: readStart + 140))
+        XCTAssertEqual(found.first?.start ?? -1, readStart + 4, accuracy: 0.5)
     }
 
     func testAnalyzerUsesShowNotesAlone() {
