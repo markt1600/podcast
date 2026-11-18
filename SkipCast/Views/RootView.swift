@@ -6,7 +6,6 @@ struct RootView: View {
     @State private var showingPlayer = false
 
     var body: some View {
-        @Bindable var library = library
         TabView {
             LibraryView()
                 .miniPlayer(showingPlayer: $showingPlayer)

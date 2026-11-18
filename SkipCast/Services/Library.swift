@@ -8,13 +8,13 @@ import PodcastCore
 @Observable
 final class Library {
     private let context: ModelContext
-    private let settings: Settings
+    private let settings: AppSettings
     private let downloads: DownloadManager
 
     private(set) var isRefreshing = false
     var lastError: String?
 
-    init(context: ModelContext, settings: Settings, downloads: DownloadManager) {
+    init(context: ModelContext, settings: AppSettings, downloads: DownloadManager) {
         self.context = context
         self.settings = settings
         self.downloads = downloads

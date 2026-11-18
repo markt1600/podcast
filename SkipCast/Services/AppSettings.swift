@@ -4,7 +4,7 @@ import Observation
 /// User preferences, persisted in UserDefaults.
 @MainActor
 @Observable
-final class Settings {
+final class AppSettings {
     static let speeds: [Double] = [1.0, 1.25, 1.3, 1.4, 1.5, 1.75, 2.0]
 
     var skipAds: Bool { didSet { save(skipAds, "skipAds") } }

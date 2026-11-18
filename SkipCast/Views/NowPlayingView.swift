@@ -4,7 +4,7 @@ import PodcastCore
 
 struct NowPlayingView: View {
     @Environment(PlayerEngine.self) private var player
-    @Environment(Settings.self) private var settings
+    @Environment(AppSettings.self) private var settings
     @Environment(AdAnalysisService.self) private var analysis
     @Environment(\.dismiss) private var dismiss
     @State private var tint: Color = .orange
@@ -12,7 +12,6 @@ struct NowPlayingView: View {
     @State private var showingDetail = false
 
     var body: some View {
-        @Bindable var settings = settings
         if let episode = player.episode {
             VStack(spacing: 18) {
                 Spacer(minLength: 12)
@@ -78,7 +77,7 @@ struct NowPlayingView: View {
                 HStack(spacing: 10) {
                     Menu {
                         Picker("Speed", selection: Binding(get: { settings.playbackSpeed }, set: { player.setSpeed($0) })) {
-                            ForEach(Settings.speeds, id: \.self) { Text(Format.speed($0)).tag($0) }
+                            ForEach(AppSettings.speeds, id: \.self) { Text(Format.speed($0)).tag($0) }
                         }
                     } label: {
                         Chip(text: Format.speed(settings.playbackSpeed), systemImage: "speedometer", active: settings.playbackSpeed != 1)

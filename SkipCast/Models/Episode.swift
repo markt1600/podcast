@@ -84,7 +84,9 @@ final class Episode {
     var fingerprint: [UInt64] {
         get {
             guard let fingerprintData else { return [] }
-            return fingerprintData.withUnsafeBytes { Array($0.bindMemory(to: UInt64.self)) }
+            return fingerprintData.withUnsafeBytes { bytes in
+                stride(from: 0, to: bytes.count - 7, by: 8).map { bytes.loadUnaligned(fromByteOffset: $0, as: UInt64.self) }
+            }
         }
         set { fingerprintData = newValue.withUnsafeBufferPointer { Data(buffer: $0) } }
     }

@@ -28,7 +28,7 @@ final class PlayerEngine {
     /// Set when show-notes timings can't be trusted for the audio being streamed.
     private(set) var skipDisabledReason: String?
 
-    private let settings: Settings
+    private let settings: AppSettings
     @ObservationIgnored private let player = AVPlayer()
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var statusObservation: NSKeyValueObservation?
@@ -41,7 +41,7 @@ final class PlayerEngine {
     @ObservationIgnored var onFinished: ((Episode) -> Void)?
     @ObservationIgnored var onWillPlay: ((Episode) -> Void)?
 
-    init(settings: Settings) {
+    init(settings: AppSettings) {
         self.settings = settings
         player.automaticallyWaitsToMinimizeStalling = true
 
@@ -65,8 +65,10 @@ final class PlayerEngine {
             }
         })
         notificationTokens.append(center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] notification in
-            let type = (notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init)
-            let options = (notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt).map(AVAudioSession.InterruptionOptions.init)
+            let type = (notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt)
+                .flatMap { AVAudioSession.InterruptionType(rawValue: $0) }
+            let options = (notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt)
+                .map { AVAudioSession.InterruptionOptions(rawValue: $0) }
             MainActor.assumeIsolated {
                 guard let self else { return }
                 if type == .began {
@@ -105,7 +107,9 @@ final class PlayerEngine {
         // Near the end already? Start over rather than finishing instantly.
         if episode.duration > 0, start > episode.duration - 10 { start = 0 }
         if start < 1, settings.skipIntros {
-            let introEnd = max(episode.contentStart ?? 0, episode.podcast?.introSkipSeconds ?? 0)
+            // A per-show setting made by the user wins over the detected start.
+            let manual = episode.podcast?.introSkipSeconds ?? 0
+            let introEnd = manual > 0 ? manual : (episode.contentStart ?? 0)
             if introEnd > 0, episode.duration == 0 || introEnd < episode.duration - 30 {
                 start = introEnd
                 lastSkip = SkipEvent(from: 0, to: introEnd, label: "Skipped intro", segmentStart: nil)

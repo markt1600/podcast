@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct SettingsView: View {
-    @Environment(Settings.self) private var settings
+    @Environment(AppSettings.self) private var settings
     @Environment(DownloadManager.self) private var downloads
     @Query(filter: #Predicate<Episode> { $0.downloadStateRaw == 2 }) private var downloaded: [Episode]
     @State private var confirmingDelete = false
@@ -28,7 +28,7 @@ struct SettingsView: View {
 
                 Section("Playback") {
                     Picker("Default speed", selection: $settings.playbackSpeed) {
-                        ForEach(Settings.speeds, id: \.self) { Text(Format.speed($0)).tag($0) }
+                        ForEach(AppSettings.speeds, id: \.self) { Text(Format.speed($0)).tag($0) }
                     }
                 }
 

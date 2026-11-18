@@ -8,7 +8,7 @@ import Observation
 @Observable
 final class DownloadManager: NSObject {
     private let context: ModelContext
-    private let settings: Settings
+    private let settings: AppSettings
 
     /// Fraction complete by episode uid, for episodes currently downloading.
     private(set) var progress: [String: Double] = [:]
@@ -27,7 +27,7 @@ final class DownloadManager: NSObject {
         return URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
     }()
 
-    init(context: ModelContext, settings: Settings) {
+    init(context: ModelContext, settings: AppSettings) {
         self.context = context
         self.settings = settings
         super.init()

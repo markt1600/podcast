@@ -7,7 +7,7 @@ import UIKit
 @Observable
 final class AppModel {
     let container: ModelContainer
-    let settings: Settings
+    let settings: AppSettings
     let downloads: DownloadManager
     let library: Library
     let player: PlayerEngine
@@ -23,7 +23,7 @@ final class AppModel {
             fatalError("Could not open the podcast library: \(error)")
         }
         let context = container.mainContext
-        settings = Settings()
+        settings = AppSettings()
         downloads = DownloadManager(context: context, settings: settings)
         library = Library(context: context, settings: settings, downloads: downloads)
         player = PlayerEngine(settings: settings)
