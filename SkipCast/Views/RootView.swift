@@ -4,21 +4,27 @@ struct RootView: View {
     @Environment(PlayerEngine.self) private var player
     @Environment(Library.self) private var library
     @State private var showingPlayer = false
+    /// Reopen on the tab the user was last on.
+    @AppStorage("selectedTab") private var selectedTab = 0
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             LibraryView()
                 .miniPlayer(showingPlayer: $showingPlayer)
                 .tabItem { Label("Library", systemImage: "square.grid.2x2.fill") }
+                .tag(0)
             DiscoverView()
                 .miniPlayer(showingPlayer: $showingPlayer)
                 .tabItem { Label("Discover", systemImage: "sparkle.magnifyingglass") }
+                .tag(1)
             DownloadsView()
                 .miniPlayer(showingPlayer: $showingPlayer)
                 .tabItem { Label("Downloads", systemImage: "arrow.down.circle.fill") }
+                .tag(2)
             SettingsView()
                 .miniPlayer(showingPlayer: $showingPlayer)
                 .tabItem { Label("Settings", systemImage: "gearshape.fill") }
+                .tag(3)
         }
         .sheet(isPresented: $showingPlayer) {
             NowPlayingView()
