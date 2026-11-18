@@ -50,16 +50,30 @@ jobs:
             xcrun simctl launch booted com.skipcast.app -selectedTab $tab
             sleep 25
             xcrun simctl io booted screenshot "screenshots/tab-$tab.png"
-            xcrun simctl spawn booted launchctl list | grep -q com.skipcast.app
+            xcrun simctl spawn booted launchctl list | grep -q com.skipcast.app || { echo "::error::App is not running after launch ($tab$screen)"; touch app-died; }
             xcrun simctl terminate booted com.skipcast.app
           done
           for screen in player show; do
             xcrun simctl launch booted com.skipcast.app -selectedTab 0 -demoScreen $screen
             sleep 40
             xcrun simctl io booted screenshot "screenshots/$screen.png"
-            xcrun simctl spawn booted launchctl list | grep -q com.skipcast.app
+            xcrun simctl spawn booted launchctl list | grep -q com.skipcast.app || { echo "::error::App is not running after launch ($tab$screen)"; touch app-died; }
             xcrun simctl terminate booted com.skipcast.app
           done
+          if [ -f app-died ]; then
+            echo "---- crash reports"
+            ls ~/Library/Logs/DiagnosticReports/ | grep -i skipcast || true
+            for f in ~/Library/Logs/DiagnosticReports/SkipCast*.ips; do [ -f "$f" ] && python3 -c "
+          import json,sys
+          t=open(sys.argv[1]).read(); head,body=t.split('\n',1); d=json.loads(body)
+          print(d.get('exception'), d.get('termination'))
+          print(d.get('asi'))
+          ft=d.get('faultingThread',0); imgs=d['usedImages']
+          for fr in d['threads'][ft]['frames'][:40]: print(imgs[fr['imageIndex']].get('name'), fr.get('symbol'), fr.get('sourceFile',''), fr.get('sourceLine',''))
+          " "$f" && break; done
+            xcrun simctl spawn booted log show --last 6m --predicate 'process == "SkipCast" AND (messageType == error OR messageType == fault)' | tail -40 || true
+            exit 1
+          fi
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
