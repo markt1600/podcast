@@ -50,6 +50,8 @@ final class Episode {
     /// True when the ad timings were measured on the downloaded file and are
     /// therefore only valid for that exact file.
     var analysisIsFileSpecific: Bool = false
+    /// Why the last attempt to scan the audio failed; nil if it hasn't failed.
+    var scanFailure: String?
     /// Set when playback showed that this audio does not line up with the
     /// show-notes timestamps (ads were inserted), so they must not be trusted.
     var notesTimingsUnreliable: Bool = false

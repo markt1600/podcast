@@ -89,11 +89,25 @@ struct EpisodeRow: View {
                 // Fully scanned: the seal says the timings were measured on this audio.
                 Label(ads.isEmpty ? "No ads" : "\(ads.count) ad\(ads.count == 1 ? "" : "s")", systemImage: "checkmark.seal.fill")
                     .foregroundStyle(ads.isEmpty ? Color.secondary : Color.orange)
-            } else if !ads.isEmpty {
+            } else if episode.adsKnownFromNotes {
                 // Taken from the publisher's show notes; no scan needed.
                 Label("\(ads.count) ad\(ads.count == 1 ? "" : "s") · from notes", systemImage: "checkmark.seal")
                     .foregroundStyle(.orange)
+            } else if episode.downloadState == .downloaded {
+                unscannedBadge
             }
+        } else if episode.downloadState == .downloaded {
+            unscannedBadge
+        }
+    }
+
+    /// Downloaded but the audio hasn't been scanned: say so, never leave a blank.
+    @ViewBuilder private var unscannedBadge: some View {
+        if episode.scanFailure != nil {
+            Label("Couldn’t scan", systemImage: "exclamationmark.triangle")
+                .foregroundStyle(.red)
+        } else {
+            Label("Not scanned yet", systemImage: "clock")
         }
     }
 
@@ -221,7 +235,12 @@ struct EpisodeDetailView: View {
                 Label(ads.isEmpty ? "No ads found" : "\(ads.count) ad break\(ads.count == 1 ? "" : "s"), \(Format.length(ads.reduce(0) { $0 + $1.duration })) total",
                       systemImage: episode.analysisIsFileSpecific ? "checkmark.seal.fill" : "list.bullet.rectangle")
             }
-            if let note = episode.analysisNote {
+            if let failure = episode.scanFailure {
+                Label(failure, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            if let note = episode.analysisNote, note != episode.scanFailure {
                 Text(note)
                     .font(.caption)
                     .foregroundStyle(.secondary)

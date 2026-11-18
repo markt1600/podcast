@@ -2,6 +2,9 @@ import Foundation
 import SwiftData
 import Observation
 import PodcastCore
+import OSLog
+
+private let log = Logger(subsystem: "com.skipcast.app", category: "scan")
 
 /// Works out where the ads and the intro are in an episode.
 ///
@@ -88,12 +91,18 @@ final class AdAnalysisService {
         startWorkerIfNeeded()
     }
 
-    /// Re-queues work that was interrupted when the app last exited.
+    /// Queues every downloaded episode that still needs its audio scanned.
+    ///
+    /// The queue itself lives in memory, so this runs at each launch to pick up
+    /// whatever was waiting, part-way through, or had failed when the app last
+    /// exited. (`enqueue` leaves out episodes that don't need a scan.)
     func resume() {
-        let descriptor = FetchDescriptor<Episode>(predicate: #Predicate { $0.analysisStateRaw == 1 || $0.analysisStateRaw == 2 })
+        let descriptor = FetchDescriptor<Episode>(
+            predicate: #Predicate { $0.downloadStateRaw == 2 && !$0.analysisIsFileSpecific },
+            sortBy: [SortDescriptor(\.pubDate, order: .reverse)])
         for episode in (try? context.fetch(descriptor)) ?? [] {
-            episode.analysisState = .none
-            if episode.downloadState == .downloaded { enqueue(episode) }
+            if episode.analysisState == .queued || episode.analysisState == .analyzing { episode.analysisState = .none }
+            enqueue(episode)
         }
     }
 
@@ -185,6 +194,7 @@ final class AdAnalysisService {
             } catch {
                 note = error.localizedDescription
                 progress[uid] = nil
+                log.error("Scan of \(episode.title, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
             }
         }
 
@@ -205,6 +215,7 @@ final class AdAnalysisService {
         guard !episode.isDeleted else { return }
 
         if evidence.transcript.isEmpty && analysis.segments.isEmpty && analysis.contentStart == nil {
+            episode.scanFailure = note
             if !hadQuickResult {
                 episode.analysisState = .unavailable
                 episode.analysisNote = note ?? "Download the episode to scan it for ads."
@@ -213,6 +224,7 @@ final class AdAnalysisService {
             }
             return
         }
+        episode.scanFailure = fileSpecific ? nil : note
         episode.adSegments = analysis.segments
         episode.contentStart = analysis.contentStart
         if fileSpecific {
