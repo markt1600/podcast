@@ -35,7 +35,15 @@ struct SpeechTranscriber {
         }
     }
 
-    func transcribe(_ url: URL, progress: @escaping @Sendable (Double) -> Void) async throws -> [TranscriptSegment] {
+    /// Transcribes from `startTime` to the end, handing over each chunk as it
+    /// is finished so results can be used while the scan is still running.
+    ///
+    /// - Parameter onChunk: receives the chunk's words, the time transcribed up
+    ///   to, and the fraction of the file done. Return false to stop early
+    ///   (the scan can be resumed later from the reported time).
+    /// - Returns: true if the end of the file was reached.
+    func transcribe(_ url: URL, from startTime: TimeInterval = 0,
+                    onChunk: @MainActor ([TranscriptSegment], TimeInterval, Double) -> Bool) async throws -> Bool {
         guard await Self.requestAuthorization() else { throw TranscriptionError.notAuthorized }
         guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable,
               recognizer.supportsOnDeviceRecognition else { throw TranscriptionError.onDeviceUnavailable }
@@ -44,19 +52,19 @@ struct SpeechTranscriber {
         let format = file.processingFormat
         let totalFrames = file.length
         let chunkFrames = AVAudioFramePosition(chunkLength * format.sampleRate)
-        var output: [TranscriptSegment] = []
-        var chunkStart: AVAudioFramePosition = 0
+        var chunkStart = min(totalFrames, max(0, AVAudioFramePosition(startTime * format.sampleRate)))
 
         while chunkStart < totalFrames {
             try Task.checkCancellation()
             let offset = Double(chunkStart) / format.sampleRate
             let frames = min(chunkFrames, totalFrames - chunkStart)
             let words = try await recognizeChunk(file: file, start: chunkStart, frames: frames, recognizer: recognizer)
-            output += words.map { TranscriptSegment(start: $0.start + offset, end: $0.end + offset, text: $0.text) }
             chunkStart += frames
-            progress(Double(chunkStart) / Double(totalFrames))
+            let shifted = words.map { TranscriptSegment(start: $0.start + offset, end: $0.end + offset, text: $0.text) }
+            let keepGoing = await onChunk(shifted, Double(chunkStart) / format.sampleRate, Double(chunkStart) / Double(totalFrames))
+            if !keepGoing { return false }
         }
-        return output
+        return true
     }
 
     private func recognizeChunk(file: AVAudioFile, start: AVAudioFramePosition, frames: AVAudioFramePosition,

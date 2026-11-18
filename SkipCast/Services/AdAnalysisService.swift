@@ -17,6 +17,14 @@ final class AdAnalysisService {
 
     /// Fraction of the current episode transcribed, by episode uid.
     private(set) var progress: [String: Double] = [:]
+    /// How far into the audio the scan has got, in seconds, by episode uid.
+    /// Ads before this point are already known and will be skipped.
+    private(set) var scannedUpTo: [String: Double] = [:]
+    /// The episode being scanned right now, and how many are waiting.
+    private(set) var currentUID: String?
+    private(set) var waitingCount = 0
+    /// Transcripts of scans that were set aside for a more urgent episode.
+    @ObservationIgnored private var partials: [String: [TranscriptSegment]] = [:]
     @ObservationIgnored private var queue: [Episode] = []
     @ObservationIgnored private var worker: Task<Void, Never>?
     @ObservationIgnored private var priorityUID: String?
@@ -64,6 +72,7 @@ final class AdAnalysisService {
         quickScan(episode)
         if episode.analysisState != .done { episode.analysisState = .queued }
         queue.append(episode)
+        waitingCount = queue.count
         startWorkerIfNeeded()
     }
 
@@ -90,8 +99,11 @@ final class AdAnalysisService {
                 let index = queue.firstIndex { $0.uid == priorityUID }
                     ?? queue.indices.max { queue[$0].pubDate < queue[$1].pubDate } ?? 0
                 let episode = queue.remove(at: index)
+                waitingCount = queue.count
                 guard !episode.isDeleted else { continue }
+                currentUID = episode.uid
                 await analyze(episode)
+                currentUID = nil
             }
             worker = nil
         }
@@ -107,15 +119,45 @@ final class AdAnalysisService {
 
         if let file = episode.localFileURL {
             do {
-                progress[uid] = 0
-                evidence.transcript = try await SpeechTranscriber().transcribe(file) { fraction in
-                    Task { @MainActor in self.progress[uid] = fraction }
+                // Pick up where an interrupted scan of this episode left off.
+                var words = partials[uid] ?? []
+                progress[uid] = scannedUpTo[uid].map { episode.duration > 0 ? $0 / episode.duration : 0 } ?? 0
+                var chunksSincePublish = 0
+                let finished = try await SpeechTranscriber().transcribe(file, from: scannedUpTo[uid] ?? 0) { chunk, upTo, fraction in
+                    words += chunk
+                    self.progress[uid] = fraction
+                    self.scannedUpTo[uid] = upTo
+                    // Every few minutes of audio, publish what has been found so far,
+                    // so skipping works on the part already scanned.
+                    chunksSincePublish += 1
+                    if chunksSincePublish >= 4 {
+                        chunksSincePublish = 0
+                        self.publishPartial(words, base: evidence, for: episode)
+                    }
+                    // Step aside if the user has started playing a different episode.
+                    if let urgent = self.priorityUID, urgent != uid, self.queue.contains(where: { $0.uid == urgent }) {
+                        return false
+                    }
+                    return true
                 }
+                progress[uid] = nil
+                guard finished else {
+                    partials[uid] = words
+                    if !episode.isDeleted {
+                        if episode.analysisState != .done { episode.analysisState = .queued }
+                        queue.append(episode)
+                        waitingCount = queue.count
+                    }
+                    return
+                }
+                partials[uid] = nil
+                scannedUpTo[uid] = nil
+                evidence.transcript = words
                 fileSpecific = true
             } catch {
                 note = error.localizedDescription
+                progress[uid] = nil
             }
-            progress[uid] = nil
         }
 
         if evidence.transcript.isEmpty, let url = episode.transcriptURL, let type = episode.transcriptType,
@@ -150,6 +192,23 @@ final class AdAnalysisService {
         episode.analysisState = .done
         episode.analysisNote = fileSpecific ? nil : (note ?? "From the publisher’s notes. Download the episode for exact timing.")
         try? context.save()
+    }
+
+    /// Analyses the part transcribed so far and stores the result, leaving the
+    /// episode marked as still being scanned.
+    private func publishPartial(_ words: [TranscriptSegment], base: EpisodeEvidence, for episode: Episode) {
+        var evidence = base
+        evidence.transcript = words
+        evidence.reference = referenceFingerprints(excluding: episode.uid)
+        Task {
+            let analysis = await Task.detached(priority: .utility) { [evidence] in
+                EpisodeAnalyzer().analyze(evidence)
+            }.value
+            // The full result may have landed in the meantime.
+            guard !episode.isDeleted, episode.analysisState != .done || !episode.analysisIsFileSpecific else { return }
+            episode.adSegments = analysis.segments
+            episode.contentStart = analysis.contentStart
+        }
     }
 
     /// Fingerprints of recently analysed episodes. Sponsor reads and intros

@@ -38,7 +38,8 @@ struct NowPlayingView: View {
 
                 VStack(spacing: 6) {
                     Scrubber(time: scrubTime ?? player.currentTime, duration: player.duration,
-                             segments: episode.adSegments, minimumConfidence: settings.minimumAdConfidence) { value, finished in
+                             segments: episode.adSegments, minimumConfidence: settings.minimumAdConfidence,
+                             scannedUpTo: scannedExtent(of: episode)) { value, finished in
                         if finished {
                             player.seek(to: value)
                             scrubTime = nil
@@ -145,6 +146,12 @@ struct NowPlayingView: View {
         }
     }
 
+    /// How much of the episode has been scanned, in seconds; nil if not applicable.
+    private func scannedExtent(of episode: Episode) -> Double? {
+        if let upTo = analysis.scannedUpTo[episode.uid] { return upTo }
+        return episode.analysisState == .done && episode.analysisIsFileSpecific ? player.duration : nil
+    }
+
     @ViewBuilder private var skipNotice: some View {
         if let skip = player.lastSkip {
             HStack(spacing: 10) {
@@ -169,7 +176,10 @@ struct NowPlayingView: View {
             if let reason = player.skipDisabledReason {
                 Text(reason)
             } else if let fraction = analysis.progress[episode.uid] {
-                Text("Listening for ads… \(Int(fraction * 100))%")
+                Text("Scanning for ads… \(Int(fraction * 100))%"
+                     + (analysis.scannedUpTo[episode.uid].map { " · ads skipped up to \(Format.clock($0))" } ?? ""))
+            } else if episode.downloadState == .downloaded, analysis.isWorking(on: episode) {
+                Text("Waiting to scan · this episode is next")
             } else if episode.analysisState == .done {
                 let ads = episode.adSegments.filter { $0.kind == .ad }
                 Text(ads.isEmpty ? "No ads found in this episode"
@@ -212,6 +222,8 @@ private struct Scrubber: View {
     let duration: Double
     let segments: [AdSegment]
     let minimumConfidence: Double
+    /// Scanned portion of the episode, drawn as a thin line under the bar.
+    var scannedUpTo: Double?
     /// Called with the new time while dragging (`finished == false`) and on release.
     let onScrub: (Double, Bool) -> Void
 
@@ -221,6 +233,12 @@ private struct Scrubber: View {
             let fraction = duration > 0 ? min(1, max(0, time / duration)) : 0
             ZStack(alignment: .leading) {
                 Capsule().fill(.quaternary).frame(height: 6)
+                if let scannedUpTo, duration > 0 {
+                    Capsule()
+                        .fill(Color.orange.opacity(0.55))
+                        .frame(width: width * min(1, scannedUpTo / duration), height: 2)
+                        .offset(y: 7)
+                }
                 Capsule().fill(.primary.opacity(0.85)).frame(width: width * fraction, height: 6)
                 if duration > 0 {
                     ForEach(segments, id: \.start) { segment in

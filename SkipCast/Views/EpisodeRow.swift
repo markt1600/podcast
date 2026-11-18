@@ -79,10 +79,16 @@ struct EpisodeRow: View {
         if let fraction = analysis.progress[episode.uid] {
             Label("Scanning \(Int(fraction * 100))%", systemImage: "waveform.badge.magnifyingglass")
                 .foregroundStyle(.orange)
+        } else if episode.downloadState == .downloaded, episode.analysisState == .queued || analysis.isWorking(on: episode) {
+            Label("Waiting to scan", systemImage: "clock")
         } else if episode.analysisState == .done {
             let ads = episode.adSegments.filter { $0.kind == .ad }
-            if !ads.isEmpty {
-                Label("\(ads.count) ad\(ads.count == 1 ? "" : "s")", systemImage: "forward.end.fill")
+            if episode.analysisIsFileSpecific {
+                // Fully scanned: the seal says the timings were measured on this audio.
+                Label(ads.isEmpty ? "No ads" : "\(ads.count) ad\(ads.count == 1 ? "" : "s")", systemImage: "checkmark.seal.fill")
+                    .foregroundStyle(ads.isEmpty ? Color.secondary : Color.orange)
+            } else if !ads.isEmpty {
+                Label("\(ads.count) ad\(ads.count == 1 ? "" : "s") · notes", systemImage: "list.bullet.rectangle")
                     .foregroundStyle(.orange)
             }
         }
@@ -197,7 +203,13 @@ struct EpisodeDetailView: View {
 
     @ViewBuilder private var scanStatus: some View {
         if let fraction = analysis.progress[episode.uid] {
-            ProgressView(value: fraction) { Text("Listening for ads… \(Int(fraction * 100))%").font(.subheadline) }
+            ProgressView(value: fraction) {
+                Text("Listening for ads… \(Int(fraction * 100))%").font(.subheadline)
+            } currentValueLabel: {
+                if let upTo = analysis.scannedUpTo[episode.uid] {
+                    Text("Scanned to \(Format.clock(upTo)). Ads before that point are already skipped.")
+                }
+            }
         } else if episode.analysisState == .queued || episode.analysisState == .analyzing {
             Label("Waiting to scan", systemImage: "clock")
         } else {
