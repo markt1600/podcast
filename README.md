@@ -12,8 +12,10 @@ downloaded automatically, and play them at 1×–2× with 30-second skips. Turn 
 You need a Mac with Xcode 16 or later.
 
 1. Open `SkipCast.xcodeproj`.
-2. Select the **SkipCast** target → *Signing & Capabilities* → pick your team
-   (a free Apple ID works) and change the bundle identifier to something unique.
+2. Select the **SkipCast** target → *Signing & Capabilities* → pick your paid
+   Apple Developer team and change the bundle identifier to something unique
+   (for example `com.yourname.skipcast`). iCloud sync needs a paid team; with a
+   free Apple ID, clear *Code Signing Entitlements* in the build settings first.
 3. Plug in your iPhone, choose it as the run destination, and press Run.
 
 The first time an episode is scanned, iOS asks for Speech Recognition
@@ -28,17 +30,22 @@ permission. Scanning happens on the device; audio is never uploaded.
 - **Per-show speed.** Changing speed in the player is remembered for that
   show. Shows without their own speed use the default from Settings.
 - **iCloud sync.** Subscriptions, per-show settings and your position in each
-  episode sync between devices. This needs the iCloud capability, which Apple
-  only allows on a paid Apple Developer account: in Xcode, select the target →
-  *Signing & Capabilities* → **+ Capability** → **iCloud** → tick **Key-value
-  storage**. Without it the app works normally and simply doesn't sync.
+  episode sync between your devices. It is on by default and needs a paid
+  Apple Developer team selected under *Signing & Capabilities* (Xcode adds the
+  iCloud key-value capability to your App ID automatically). Each device must
+  be signed in to the same iCloud account.
 - **CarPlay.** The app has CarPlay screens (Up Next, Shows, Now Playing with a
-  speed button). They appear in the CarPlay Simulator out of the box. For a
-  real car, Apple must grant your developer account the CarPlay audio
-  entitlement (requested at developer.apple.com/contact/carplay); once granted,
-  set `CODE_SIGN_ENTITLEMENTS` to `Config/CarPlay.entitlements` for device
-  builds. Without it, audio still plays in the car and the car's Now Playing
-  controls work; the app just has no icon on the CarPlay screen.
+  speed button). They appear in the CarPlay Simulator out of the box
+  (Simulator → I/O → External Displays → CarPlay). For a real car, Apple must
+  grant your developer account the CarPlay audio entitlement:
+  1. Request it at developer.apple.com/contact/carplay (category: Audio).
+  2. Once approved, enable **CarPlay Audio App** for the App ID in your
+     developer account.
+  3. In the target's build settings, change *Code Signing Entitlements* from
+     `Config/SkipCast.entitlements` to `Config/SkipCast-CarPlay.entitlements`.
+
+  Until then, audio still plays in the car and the car's Now Playing controls
+  work; the app just has no icon on the CarPlay screen.
 
 ## How ads are found
 
