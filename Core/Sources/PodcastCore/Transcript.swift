@@ -32,8 +32,10 @@ struct WordTrack {
                 guard !norm.isEmpty else { continue }
                 let start = segment.start + step * Double(index)
                 let last = token.last!
+                // "Dr." and friends end in a full stop without ending the sentence.
+                let endsSentence = (last == "." && !Self.abbreviations.contains(norm)) || last == "?" || last == "!"
                 words.append(Word(start: start, end: raw.count == 1 ? segment.end : start + step, norm: norm,
-                                  endsSentence: last == "." || last == "?" || last == "!", offset: cursor))
+                                  endsSentence: endsSentence, offset: cursor))
                 utf16Offsets.append(cursor)
                 pieces.append(norm)
                 cursor += norm.utf16.count + 1
@@ -41,6 +43,8 @@ struct WordTrack {
         }
         text = pieces.joined(separator: " ")
     }
+
+    static let abbreviations: Set<String> = ["dr", "mr", "mrs", "ms", "st", "vs", "prof", "jr", "sr", "no", "mt"]
 
     /// Lowercases and keeps only what matters for matching: letters, digits,
     /// apostrophes and the `.` `/` of web addresses.

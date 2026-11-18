@@ -56,15 +56,15 @@ public struct EpisodeAnalyzer: Sendable {
             let hasCue = cues.contains { range.contains(track.words[$0.first].start) }
             let nearStart = range.lowerBound < 300
             let nearEnd = evidence.duration.map { range.upperBound > $0 - 300 } ?? false
-            if hasCue {
-                segments.append(AdSegment(start: range.lowerBound, end: range.upperBound, confidence: 0.85,
-                                          reason: "sponsor or promo read, repeated word for word"))
-            } else if nearStart || (nearEnd && found.external) {
-                // Standard show intro/outro, or a cold-open teaser replaying a clip
-                // from later in the episode.
+            if nearStart || (nearEnd && found.external) {
+                // Standard show intro/outro (which may well thank "our sponsors" or
+                // plug a newsletter), or a cold-open teaser replaying a later clip.
                 segments.append(AdSegment(start: range.lowerBound, end: range.upperBound, confidence: 0.8,
                                           reason: found.external ? "recurring intro or outro" : "teaser of a later clip",
                                           kind: .boilerplate))
+            } else if hasCue {
+                segments.append(AdSegment(start: range.lowerBound, end: range.upperBound, confidence: 0.85,
+                                          reason: "sponsor or promo read, repeated word for word"))
             } else if found.external {
                 // Mid-episode and heard verbatim in another episode: an inserted ad.
                 segments.append(AdSegment(start: range.lowerBound, end: range.upperBound, confidence: 0.7,
