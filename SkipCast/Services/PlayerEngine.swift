@@ -25,6 +25,8 @@ final class PlayerEngine {
     private(set) var duration: Double = 0
     /// Most recent automatic skip, shown briefly with an Undo button.
     private(set) var lastSkip: SkipEvent?
+    /// When the sleep timer will pause playback; nil if it is off.
+    private(set) var sleepTimerEnd: Date?
     /// Set when show-notes timings can't be trusted for the audio being streamed.
     private(set) var skipDisabledReason: String?
 
@@ -164,6 +166,18 @@ final class PlayerEngine {
         updateNowPlaying()
     }
 
+    static let sleepTimerOptions = [10, 15, 30, 45, 60]
+
+    /// Pauses playback after the given number of minutes; nil turns the timer off.
+    func setSleepTimer(minutes: Int?) {
+        sleepTimerEnd = minutes.map { Date.now.addingTimeInterval(Double($0) * 60) }
+    }
+
+    /// Whole minutes left on the sleep timer, rounded up.
+    var sleepMinutesRemaining: Int? {
+        sleepTimerEnd.map { max(1, Int(($0.timeIntervalSinceNow / 60).rounded(.up))) }
+    }
+
     func undoLastSkip() {
         guard let skip = lastSkip else { return }
         if let start = skip.segmentStart { allowedSegments.insert(start) }
@@ -204,6 +218,14 @@ final class PlayerEngine {
     private func tick(_ time: Double) {
         guard time.isFinite, let episode else { return }
         currentTime = time
+
+        // The observer only fires while audio is playing, which is exactly when
+        // the timer matters, and it keeps firing with the screen locked.
+        if let end = sleepTimerEnd, Date.now >= end {
+            sleepTimerEnd = nil
+            pause()
+            return
+        }
 
         if let itemDuration = player.currentItem?.duration.seconds, itemDuration.isFinite, itemDuration > 0, itemDuration != duration {
             duration = itemDuration

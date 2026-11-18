@@ -74,7 +74,7 @@ struct NowPlayingView: View {
                 }
                 .foregroundStyle(.primary)
 
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     Menu {
                         Picker("Speed", selection: Binding(get: { settings.playbackSpeed }, set: { player.setSpeed($0) })) {
                             ForEach(AppSettings.speeds, id: \.self) { Text(Format.speed($0)).tag($0) }
@@ -88,11 +88,21 @@ struct NowPlayingView: View {
                     Button { settings.skipIntros.toggle() } label: {
                         Chip(text: "Skip intro", systemImage: "backward.end.alt", active: settings.skipIntros)
                     }
-                    Button { showingDetail = true } label: {
-                        Chip(text: "", systemImage: "info.circle", active: false)
+                    Menu {
+                        ForEach(PlayerEngine.sleepTimerOptions, id: \.self) { minutes in
+                            Button(minutes == 60 ? "1 hour" : "\(minutes) minutes") { player.setSleepTimer(minutes: minutes) }
+                        }
+                        if player.sleepTimerEnd != nil {
+                            Button("Turn off", systemImage: "xmark", role: .destructive) { player.setSleepTimer(minutes: nil) }
+                        }
+                    } label: {
+                        Chip(text: player.sleepMinutesRemaining.map { "\($0)m" } ?? "", systemImage: "moon.zzz.fill",
+                             active: player.sleepTimerEnd != nil)
                     }
-                    .accessibilityLabel("Episode details")
+                    .accessibilityLabel(player.sleepMinutesRemaining.map { "Sleep timer, \($0) minutes left" } ?? "Sleep timer")
                 }
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
 
                 adStatus(for: episode)
 
@@ -109,6 +119,15 @@ struct NowPlayingView: View {
                 Spacer(minLength: 8)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .topTrailing) {
+                Button { showingDetail = true } label: {
+                    Image(systemName: "info.circle")
+                        .font(.title3)
+                        .padding(18)
+                }
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Episode details")
+            }
             .background {
                 LinearGradient(colors: [tint.opacity(0.55), Color(.systemBackground)], startPoint: .top, endPoint: .center)
                     .ignoresSafeArea()
@@ -180,7 +199,7 @@ private struct Chip: View {
             if !text.isEmpty { Text(text) }
         }
         .font(.footnote.weight(.semibold))
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 11)
         .padding(.vertical, 8)
         .foregroundStyle(active ? Color.white : Color.primary)
         .background(active ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.thinMaterial), in: Capsule())
