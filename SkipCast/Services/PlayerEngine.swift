@@ -31,6 +31,13 @@ final class PlayerEngine {
     private(set) var skipDisabledReason: String?
 
     private let settings: AppSettings
+    private let stats: ListeningStats
+    @ObservationIgnored private var silenceObserver: Any?
+    @ObservationIgnored private var silences: [ClosedRange<Double>] = []
+    /// The pause playback is currently hurrying through, if any.
+    @ObservationIgnored private var currentSilence: ClosedRange<Double>?
+    /// How much faster than the chosen speed pauses are played.
+    private static let silenceRate = 3.0
     @ObservationIgnored private let player = AVPlayer()
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var statusObservation: NSKeyValueObservation?
@@ -43,7 +50,7 @@ final class PlayerEngine {
     @ObservationIgnored var onFinished: ((Episode) -> Void)?
     /// Called when playback pauses or a show's speed changes, so state can be synced.
     @ObservationIgnored var onStateSaved: (() -> Void)?
-    @ObservationIgnored var onSpeedChanged: ((Podcast) -> Void)?
+    @ObservationIgnored var onShowSettingChanged: ((Podcast) -> Void)?
 
     /// Speed for what is playing: the show's own if it has one, else the default.
     var speed: Double {
@@ -53,12 +60,16 @@ final class PlayerEngine {
     /// Called when the audio turns out not to match the show-notes timestamps.
     @ObservationIgnored var onNotesMismatch: ((Episode) -> Void)?
 
-    init(settings: AppSettings) {
+    init(settings: AppSettings, stats: ListeningStats) {
         self.settings = settings
+        self.stats = stats
         player.automaticallyWaitsToMinimizeStalling = true
 
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main) { [weak self] time in
             MainActor.assumeIsolated { self?.tick(time.seconds) }
+        }
+        silenceObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.1, preferredTimescale: 600), queue: .main) { [weak self] time in
+            MainActor.assumeIsolated { self?.silenceTick(time.seconds) }
         }
         statusObservation = player.observe(\.timeControlStatus) { [weak self] player, _ in
             let status = player.timeControlStatus
@@ -114,6 +125,10 @@ final class PlayerEngine {
         // Time-domain stretching keeps voices natural at 1.25–2×.
         item.audioTimePitchAlgorithm = .timeDomain
         player.replaceCurrentItem(with: item)
+        currentSilence = nil
+        silences = episode.silences
+        applyVoiceBoost()
+        prepareSilences(for: episode)
 
         var start = episode.position
         // Near the end already? Start over rather than finishing instantly.
@@ -125,6 +140,7 @@ final class PlayerEngine {
             if introEnd > 0, episode.duration == 0 || introEnd < episode.duration - 30 {
                 start = introEnd
                 lastSkip = SkipEvent(from: 0, to: introEnd, label: "Skipped intro", segmentStart: nil)
+                stats.recordSkip(isAd: false, seconds: introEnd)
             }
         }
         if start > 0 {
@@ -141,6 +157,7 @@ final class PlayerEngine {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
         try? AVAudioSession.sharedInstance().setActive(true)
         wantsToPlay = true
+        currentSilence = nil
         player.defaultRate = Float(speed)
         player.rate = Float(speed)
     }
@@ -149,6 +166,7 @@ final class PlayerEngine {
         wantsToPlay = false
         player.pause()
         savePosition()
+        stats.flush()
         onStateSaved?()
     }
 
@@ -174,13 +192,98 @@ final class PlayerEngine {
     func setSpeed(_ speed: Double) {
         if let podcast = episode?.podcast {
             podcast.playbackSpeed = speed
-            onSpeedChanged?(podcast)
+            onShowSettingChanged?(podcast)
         } else {
             settings.playbackSpeed = speed
         }
         player.defaultRate = Float(speed)
         if isPlaying { player.rate = Float(speed) }
         updateNowPlaying()
+    }
+
+    // MARK: - Trim silence and voice boost
+
+    /// Whether pauses are shortened for what is playing: the show's own
+    /// setting if it has one, else the default.
+    var trimSilence: Bool {
+        episode?.podcast?.trimSilence ?? settings.trimSilence
+    }
+
+    var voiceBoost: Bool {
+        episode?.podcast?.voiceBoost ?? settings.voiceBoost
+    }
+
+    /// Whether silence trimming can work for this episode (it needs the file).
+    var canTrimSilence: Bool {
+        episode?.localFileURL != nil
+    }
+
+    /// Turns silence trimming on or off and remembers it for this show.
+    func setTrimSilence(_ on: Bool) {
+        guard let episode else { return }
+        if let podcast = episode.podcast {
+            podcast.trimSilence = on
+            onShowSettingChanged?(podcast)
+        } else {
+            settings.trimSilence = on
+        }
+        if on {
+            prepareSilences(for: episode)
+        } else if currentSilence != nil {
+            currentSilence = nil
+            if isPlaying { player.rate = Float(speed) }
+        }
+    }
+
+    func setVoiceBoost(_ on: Bool) {
+        if let podcast = episode?.podcast {
+            podcast.voiceBoost = on
+            onShowSettingChanged?(podcast)
+        } else {
+            settings.voiceBoost = on
+        }
+        applyVoiceBoost()
+    }
+
+    private func applyVoiceBoost() {
+        guard let item = player.currentItem else { return }
+        guard voiceBoost else {
+            item.audioMix = nil
+            return
+        }
+        Task {
+            guard let track = try? await item.asset.loadTracks(withMediaType: .audio).first,
+                  item === player.currentItem, voiceBoost else { return }
+            item.audioMix = VoiceBoost.audioMix(for: track)
+        }
+    }
+
+    /// Finds the episode's pauses the first time they are needed.
+    private func prepareSilences(for episode: Episode) {
+        guard trimSilence, silences.isEmpty, let file = episode.localFileURL else { return }
+        let uid = episode.uid
+        Task {
+            let found = await Task.detached(priority: .utility) { SilenceScanner.scan(file) }.value
+            guard !episode.isDeleted, !found.isEmpty else { return }
+            episode.silences = found
+            if self.episode?.uid == uid { silences = found }
+        }
+    }
+
+    /// Plays pauses several times faster, returning to normal as speech resumes.
+    private func silenceTick(_ time: Double) {
+        guard isPlaying, time.isFinite else { return }
+        let silence = trimSilence ? SilenceFinder.silence(at: time, in: silences) : nil
+        if let silence, currentSilence == nil {
+            currentSilence = silence
+            player.rate = Float(min(speed * Self.silenceRate, 8))
+        } else if silence == nil, let finished = currentSilence {
+            currentSilence = nil
+            player.rate = Float(speed)
+            // Time the pause would have taken, less the time it did take.
+            let length = finished.upperBound - finished.lowerBound
+            stats.recordSilence(seconds: length / speed * (1 - 1 / Self.silenceRate))
+        }
     }
 
     static let sleepTimerOptions = [10, 15, 30, 45, 60]
@@ -198,6 +301,7 @@ final class PlayerEngine {
     func undoLastSkip() {
         guard let skip = lastSkip else { return }
         if let start = skip.segmentStart { allowedSegments.insert(start) }
+        stats.recordSkip(isAd: skip.label == "Skipped ad", seconds: -(skip.to - skip.from))
         lastSkip = nil
         jump(to: skip.from)
     }
@@ -264,6 +368,7 @@ final class PlayerEngine {
             let target = duration > 0 ? min(hit.target, duration - 0.5) : hit.target
             lastSkip = SkipEvent(from: time, to: target, label: hit.segment.kind == .ad ? "Skipped ad" : "Skipped intro",
                                  segmentStart: hit.segment.start)
+            stats.recordSkip(isAd: hit.segment.kind == .ad, seconds: target - time)
             jump(to: target)
         }
 

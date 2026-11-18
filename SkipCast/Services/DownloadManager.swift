@@ -82,6 +82,7 @@ final class DownloadManager: NSObject {
             try? FileManager.default.removeItem(at: Episode.downloadsDirectory.appendingPathComponent(name))
         }
         episode.localFileName = nil
+        episode.silenceData = nil
         episode.downloadState = .none
         // Timings measured on the deleted file don't apply to a fresh stream,
         // which may have different ads stitched in.

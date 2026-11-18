@@ -14,6 +14,7 @@ final class AppModel {
     let player: PlayerEngine
     let analysis: AdAnalysisService
     let sync: CloudSync
+    let stats: ListeningStats
 
     static let shared = AppModel()
 
@@ -48,7 +49,8 @@ final class AppModel {
         settings = AppSettings()
         downloads = DownloadManager(context: context, settings: settings)
         library = Library(context: context, settings: settings, downloads: downloads)
-        player = PlayerEngine(settings: settings)
+        stats = ListeningStats()
+        player = PlayerEngine(settings: settings, stats: stats)
         analysis = AdAnalysisService(context: context)
         sync = CloudSync(context: context, library: library)
 
@@ -72,7 +74,7 @@ final class AppModel {
         player.onStateSaved = { [unowned self] in
             sync.schedule()
         }
-        player.onSpeedChanged = { [unowned self] podcast in
+        player.onShowSettingChanged = { [unowned self] podcast in
             library.showSettingsChanged(podcast)
         }
         library.onChange = { [unowned self] in
@@ -109,6 +111,7 @@ struct SkipCastApp: App {
                 .environment(model.player)
                 .environment(model.analysis)
                 .environment(model.sync)
+                .environment(model.stats)
                 .tint(.orange)
                 .task {
                     await model.library.addStarterShowsIfNeeded()
@@ -120,6 +123,7 @@ struct SkipCastApp: App {
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
                 try? model.container.mainContext.save()
+                model.stats.flush()
                 AppModel.scheduleBackgroundRefresh()
                 Task { await model.sync.syncNow() }
             } else if phase == .active {

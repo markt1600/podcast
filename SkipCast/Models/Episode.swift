@@ -60,6 +60,9 @@ final class Episode {
     /// checked for sponsor reads and intros repeated from this one.
     @Attribute(.externalStorage) var fingerprintData: Data?
 
+    /// Pauses found in the downloaded audio, as start/end pairs of seconds.
+    @Attribute(.externalStorage) var silenceData: Data?
+
     var podcast: Podcast?
 
     init(guid: String, title: String, summary: String, pubDate: Date, duration: Double, audioURL: URL, fileSize: Int64) {
@@ -96,6 +99,22 @@ final class Episode {
             }
         }
         set { fingerprintData = newValue.withUnsafeBufferPointer { Data(buffer: $0) } }
+    }
+
+    var silences: [ClosedRange<Double>] {
+        get {
+            guard let silenceData else { return [] }
+            let values: [Double] = silenceData.withUnsafeBytes { bytes in
+                stride(from: 0, to: bytes.count - 7, by: 8).map { bytes.loadUnaligned(fromByteOffset: $0, as: Double.self) }
+            }
+            return stride(from: 0, to: values.count - 1, by: 2).compactMap {
+                values[$0] <= values[$0 + 1] ? values[$0]...values[$0 + 1] : nil
+            }
+        }
+        set {
+            let values = newValue.flatMap { [$0.lowerBound, $0.upperBound] }
+            silenceData = values.withUnsafeBufferPointer { Data(buffer: $0) }
+        }
     }
 
     /// The publisher's own show notes list this episode's sponsor breaks, so

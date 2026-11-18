@@ -89,6 +89,19 @@ struct NowPlayingView: View {
                     Button { settings.skipIntros.toggle() } label: {
                         Chip(text: "Skip intro", systemImage: "backward.end.alt", active: settings.skipIntros)
                     }
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+                HStack(spacing: 8) {
+                    Button { player.setTrimSilence(!player.trimSilence) } label: {
+                        Chip(text: "Trim silence", systemImage: "scissors", active: player.trimSilence && player.canTrimSilence)
+                    }
+                    .disabled(!player.canTrimSilence)
+                    .opacity(player.canTrimSilence ? 1 : 0.5)
+                    Button { player.setVoiceBoost(!player.voiceBoost) } label: {
+                        Chip(text: "Voice boost", systemImage: "waveform", active: player.voiceBoost)
+                    }
                     Menu {
                         ForEach(PlayerEngine.sleepTimerOptions, id: \.self) { minutes in
                             Button(minutes == 60 ? "1 hour" : "\(minutes) minutes") { player.setSleepTimer(minutes: minutes) }

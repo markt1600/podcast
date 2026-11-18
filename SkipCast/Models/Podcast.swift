@@ -34,6 +34,9 @@ final class Podcast {
     var introSkipSeconds: Double = 0
     /// This show's own playback speed; nil plays it at the default speed.
     var playbackSpeed: Double?
+    /// This show's own audio settings; nil uses the defaults from Settings.
+    var trimSilence: Bool?
+    var voiceBoost: Bool?
     /// The user's choice about scanning this show for ads; see `ScanPolicy`.
     var scanPolicyRaw: Int = 0
     /// Fully scanned episodes in a row in which no ads were found.

@@ -13,6 +13,9 @@ final class AppSettings {
     var skipAds: Bool { didSet { save(skipAds, "skipAds") } }
     var skipIntros: Bool { didSet { save(skipIntros, "skipIntros") } }
     var playbackSpeed: Double { didSet { save(playbackSpeed, "playbackSpeed") } }
+    /// Defaults for shows that haven't been given their own setting.
+    var trimSilence: Bool { didSet { save(trimSilence, "trimSilence") } }
+    var voiceBoost: Bool { didSet { save(voiceBoost, "voiceBoost") } }
     /// Number of newest unplayed episodes kept downloaded per show.
     var keepCount: Int { didSet { save(keepCount, "keepCount") } }
     var autoDownload: Bool { didSet { save(autoDownload, "autoDownload") } }
@@ -34,6 +37,8 @@ final class AppSettings {
         skipAds = defaults.bool(forKey: "skipAds")
         skipIntros = defaults.bool(forKey: "skipIntros")
         playbackSpeed = defaults.double(forKey: "playbackSpeed")
+        trimSilence = defaults.bool(forKey: "trimSilence")
+        voiceBoost = defaults.bool(forKey: "voiceBoost")
         keepCount = defaults.integer(forKey: "keepCount")
         autoDownload = defaults.bool(forKey: "autoDownload")
         autoDeletePlayed = defaults.bool(forKey: "autoDeletePlayed")

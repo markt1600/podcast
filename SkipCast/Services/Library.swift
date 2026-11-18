@@ -86,6 +86,31 @@ final class Library {
         onChange?()
     }
 
+    // MARK: - OPML
+
+    /// The current subscriptions as an OPML document other podcast apps can import.
+    func exportOPML() -> String {
+        OPML.generate(podcasts().map { OPML.Entry(title: $0.title, feedURL: $0.feedURL) }, title: "SkipCast subscriptions")
+    }
+
+    /// Subscribes to every feed in an OPML document that isn't already followed.
+    /// Returns how many were added and how many couldn't be loaded.
+    func importOPML(_ data: Data) async -> (added: Int, failed: Int, found: Int) {
+        let entries = OPML.parse(data)
+        var added = 0
+        var failed = 0
+        isRefreshing = true
+        defer { isRefreshing = false }
+        for entry in entries where podcast(feedURL: entry.feedURL) == nil {
+            if (try? await subscribe(feedURL: entry.feedURL)) != nil {
+                added += 1
+            } else {
+                failed += 1
+            }
+        }
+        return (added, failed, entries.count)
+    }
+
     func unsubscribe(_ podcast: Podcast) {
         for episode in podcast.episodes {
             downloads.removeDownload(for: episode)
@@ -245,7 +270,8 @@ enum SyncTombstones {
         var shows = all.filter { URL(string: $0.feedURL).map(PodcastDiscovery.normalize) != key }
         shows.append(SyncedShow(feedURL: podcast.feedURL.absoluteString, title: podcast.title, speed: podcast.playbackSpeed,
                                 introSkip: podcast.introSkipSeconds, updatedAt: Date.now.timeIntervalSince1970, removed: true,
-                                scanPolicy: podcast.scanPolicyRaw))
+                                scanPolicy: podcast.scanPolicyRaw, trimSilence: podcast.trimSilence,
+                                voiceBoost: podcast.voiceBoost))
         set(shows)
     }
 

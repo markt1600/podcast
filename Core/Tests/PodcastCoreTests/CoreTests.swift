@@ -531,3 +531,40 @@ final class SyncMergeTests: XCTestCase {
                        SyncMerge.progressKey(forFeed: URL(string: "http://A.example/feed/")!))
     }
 }
+
+final class OPMLTests: XCTestCase {
+    func testRoundTripAndForeignFiles() {
+        let entries = [OPML.Entry(title: "Tom & Jerry \"Live\"", feedURL: URL(string: "https://a.example/feed?x=1&y=2")!),
+                       OPML.Entry(title: "Second", feedURL: URL(string: "https://b.example/rss")!)]
+        XCTAssertEqual(OPML.parse(Data(OPML.generate(entries).utf8)), entries)
+
+        // Folders, mixed-case attributes, a duplicate, and an outline that isn't a feed.
+        let foreign = """
+        <opml version="1.0"><body>
+          <outline text="Tech">
+            <outline type="rss" text="One" xmlUrl="https://one.example/feed"/>
+            <outline type="rss" title="Two" XMLURL="http://two.example/feed/"/>
+          </outline>
+          <outline text="One again" xmlUrl="http://ONE.example/feed/"/>
+          <outline text="Just a folder"/>
+        </body></opml>
+        """
+        XCTAssertEqual(OPML.parse(Data(foreign.utf8)).map(\.title), ["One", "Two"])
+        XCTAssertTrue(OPML.parse(Data("not xml".utf8)).isEmpty)
+    }
+}
+
+final class SilenceFinderTests: XCTestCase {
+    func testFindsLongPausesOnly() {
+        // 50 ms windows: 1 s speech, 0.3 s pause, 1 s speech, 1.5 s pause, speech.
+        let speech = [Float](repeating: -20, count: 20)
+        let levels = speech + [Float](repeating: -60, count: 6) + speech + [Float](repeating: -60, count: 30) + speech
+        let silences = SilenceFinder.silences(levels: levels, window: 0.05)
+        XCTAssertEqual(silences.count, 1)
+        XCTAssertEqual(silences[0].lowerBound, 2.3 + 0.15, accuracy: 0.001)
+        XCTAssertEqual(silences[0].upperBound, 3.8 - 0.15, accuracy: 0.001)
+        XCTAssertNotNil(SilenceFinder.silence(at: 3.0, in: silences))
+        XCTAssertNil(SilenceFinder.silence(at: 1.0, in: silences))
+        XCTAssertNil(SilenceFinder.silence(at: 3.75, in: silences))
+    }
+}

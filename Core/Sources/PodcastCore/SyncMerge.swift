@@ -10,14 +10,19 @@ public struct SyncedShow: Codable, Equatable, Sendable {
     /// The user's ad-scanning choice for the show (0 automatic, 1 always, 2 never);
     /// nil in records written before the setting existed.
     public var scanPolicy: Int?
+    /// Per-show audio settings; nil means "use the default".
+    public var trimSilence: Bool?
+    public var voiceBoost: Bool?
     /// When this record last changed, in seconds since 1970.
     public var updatedAt: TimeInterval
     /// True once the user has unsubscribed; kept so the removal reaches other devices.
     public var removed: Bool
 
     public init(feedURL: String, title: String, speed: Double?, introSkip: Double, updatedAt: TimeInterval,
-                removed: Bool = false, scanPolicy: Int? = nil) {
+                removed: Bool = false, scanPolicy: Int? = nil, trimSilence: Bool? = nil, voiceBoost: Bool? = nil) {
         self.scanPolicy = scanPolicy
+        self.trimSilence = trimSilence
+        self.voiceBoost = voiceBoost
         self.feedURL = feedURL
         self.title = title
         self.speed = speed
