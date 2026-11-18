@@ -189,6 +189,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SkipCast;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "SkipCast listens to downloaded episodes on your device to find the ads. Audio is never uploaded.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -220,6 +221,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SkipCast;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "SkipCast listens to downloaded episodes on your device to find the ads. Audio is never uploaded.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
