@@ -74,6 +74,11 @@ final class Library {
         for show in StarterShows.all {
             guard let podcast = try? await subscribe(feedURL: show.feedURL, directoryEntry: show) else { continue }
             if let speed = StarterShows.speeds[show.id] { podcast.playbackSpeed = speed }
+            if StarterShows.adFree.contains(show.id) {
+                podcast.cleanScanStreak = Podcast.cleanScansBeforePause
+                podcast.scanAutoPaused = true
+                podcast.scanPausedAt = .now
+            }
             // Starter picks are only a default: anything already in iCloud from
             // another device (including having removed one) takes precedence.
             podcast.syncUpdatedAt = Date(timeIntervalSince1970: 1)
@@ -211,7 +216,8 @@ enum SyncTombstones {
         let key = PodcastDiscovery.normalize(podcast.feedURL)
         var shows = all.filter { URL(string: $0.feedURL).map(PodcastDiscovery.normalize) != key }
         shows.append(SyncedShow(feedURL: podcast.feedURL.absoluteString, title: podcast.title, speed: podcast.playbackSpeed,
-                                introSkip: podcast.introSkipSeconds, updatedAt: Date.now.timeIntervalSince1970, removed: true))
+                                introSkip: podcast.introSkipSeconds, updatedAt: Date.now.timeIntervalSince1970, removed: true,
+                                scanPolicy: podcast.scanPolicyRaw))
         set(shows)
     }
 

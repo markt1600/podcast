@@ -27,6 +27,11 @@ permission. Scanning happens on the device; audio is never uploaded.
   Wi-Fi only. After that, new episodes download as they are published (over
   mobile data too, unless you turn that off), keeping up to the number set in
   Settings.
+- **Scanning only where it helps.** Episodes whose show notes already list
+  the sponsor breaks aren't scanned. Nor are shows without ads: after three
+  scanned episodes in a row come up clean, the app stops scanning that show
+  and rechecks one episode a month. Each show's menu has an *Ad scanning*
+  setting (Automatic / Always scan / Never scan) to override this.
 - **Per-show speed.** Changing speed in the player is remembered for that
   show. Shows without their own speed use the default from Settings.
 - **iCloud sync.** Subscriptions, per-show settings and your position in each

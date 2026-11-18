@@ -103,9 +103,14 @@ final class Episode {
             && adSegments.contains { $0.kind == .ad }
     }
 
-    /// Ads have been located, by a scan of the audio or from the show notes.
+    /// The show is treated as ad-free, so this episode is not scanned.
+    var scanSkippedForShow: Bool {
+        !analysisIsFileSpecific && podcast?.shouldScanForAds == false
+    }
+
+    /// Nothing more to find out: scanned, listed in the show notes, or an ad-free show.
     var adsLocated: Bool {
-        (analysisState == .done && analysisIsFileSpecific) || adsKnownFromNotes
+        (analysisState == .done && analysisIsFileSpecific) || adsKnownFromNotes || scanSkippedForShow
     }
 
     /// Segments that playback should jump over given the user's preferences.

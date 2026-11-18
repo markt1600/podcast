@@ -68,7 +68,8 @@ final class CloudSync {
     private func syncShows() async {
         let local = library.podcasts().map {
             SyncedShow(feedURL: $0.feedURL.absoluteString, title: $0.title, speed: $0.playbackSpeed,
-                       introSkip: $0.introSkipSeconds, updatedAt: $0.syncUpdatedAt.timeIntervalSince1970)
+                       introSkip: $0.introSkipSeconds, updatedAt: $0.syncUpdatedAt.timeIntervalSince1970,
+                       scanPolicy: $0.scanPolicyRaw)
         } + SyncTombstones.all
         let remote: [SyncedShow] = read("shows") ?? []
         let merged = SyncMerge.mergeShows(local: local, remote: remote)
@@ -91,6 +92,7 @@ final class CloudSync {
     private func apply(_ show: SyncedShow, to podcast: Podcast) {
         podcast.playbackSpeed = show.speed
         podcast.introSkipSeconds = show.introSkip
+        if let policy = show.scanPolicy { podcast.scanPolicyRaw = policy }
         podcast.syncUpdatedAt = Date(timeIntervalSince1970: show.updatedAt)
     }
 

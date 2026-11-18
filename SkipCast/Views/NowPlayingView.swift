@@ -180,6 +180,8 @@ struct NowPlayingView: View {
                      + (analysis.scannedUpTo[episode.uid].map { " · ads skipped up to \(Format.clock($0))" } ?? ""))
             } else if episode.downloadState == .downloaded, analysis.isWorking(on: episode) {
                 Text("Waiting to scan · this episode is next")
+            } else if episode.scanSkippedForShow {
+                Text("This show doesn’t carry ads, so it isn’t scanned")
             } else if episode.analysisState == .done {
                 let ads = episode.adSegments.filter { $0.kind == .ad }
                 Text(ads.isEmpty ? "No ads found in this episode"

@@ -7,12 +7,17 @@ public struct SyncedShow: Codable, Equatable, Sendable {
     /// The show's own playback speed; nil means "use the default".
     public var speed: Double?
     public var introSkip: Double
+    /// The user's ad-scanning choice for the show (0 automatic, 1 always, 2 never);
+    /// nil in records written before the setting existed.
+    public var scanPolicy: Int?
     /// When this record last changed, in seconds since 1970.
     public var updatedAt: TimeInterval
     /// True once the user has unsubscribed; kept so the removal reaches other devices.
     public var removed: Bool
 
-    public init(feedURL: String, title: String, speed: Double?, introSkip: Double, updatedAt: TimeInterval, removed: Bool = false) {
+    public init(feedURL: String, title: String, speed: Double?, introSkip: Double, updatedAt: TimeInterval,
+                removed: Bool = false, scanPolicy: Int? = nil) {
+        self.scanPolicy = scanPolicy
         self.feedURL = feedURL
         self.title = title
         self.speed = speed

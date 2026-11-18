@@ -18,6 +18,10 @@ enum StarterShows {
     /// Shows that start with their own speed: music is no good sped up.
     static let speeds: [Int: Double] = [1880097970: 1.0]
 
+    /// Shows known to carry no ads, so their episodes aren't scanned.
+    /// (Rechecked monthly, like any show the app finds to be ad-free.)
+    static let adFree: Set<Int> = [1400828889]
+
     private static func show(_ id: Int, _ title: String, _ author: String, _ feed: String, _ genres: [Int]) -> PodcastSearchResult {
         // The feed URLs are compile-time constants.
         PodcastSearchResult(id: id, title: title, author: author, feedURL: URL(string: feed)!, artworkURL: nil,

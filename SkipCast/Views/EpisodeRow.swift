@@ -81,6 +81,8 @@ struct EpisodeRow: View {
                 .foregroundStyle(.orange)
         } else if episode.downloadState == .downloaded, episode.analysisState == .queued || analysis.isWorking(on: episode) {
             Label("Waiting to scan", systemImage: "clock")
+        } else if episode.scanSkippedForShow, episode.downloadState == .downloaded {
+            Label("Ad-free show", systemImage: "checkmark.seal")
         } else if episode.analysisState == .done {
             let ads = episode.adSegments.filter { $0.kind == .ad }
             if episode.analysisIsFileSpecific {

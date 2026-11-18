@@ -77,6 +77,11 @@ final class AdAnalysisService {
         // (A scan can still be asked for by hand, and runs anyway if playback
         // finds the audio doesn't match the notes.)
         if !force, episode.adsKnownFromNotes { return }
+        // Nor is there any point listening to a show that doesn't carry ads.
+        if !force, let podcast = episode.podcast {
+            podcast.resumeScanningIfDue()
+            if !podcast.shouldScanForAds { return }
+        }
         if episode.analysisState != .done { episode.analysisState = .queued }
         queue.append(episode)
         waitingCount = queue.count
@@ -89,6 +94,22 @@ final class AdAnalysisService {
         for episode in (try? context.fetch(descriptor)) ?? [] {
             episode.analysisState = .none
             if episode.downloadState == .downloaded { enqueue(episode) }
+        }
+    }
+
+    /// Removes a show's episodes from the queue (it has been found, or declared, ad-free).
+    func dropWaiting(for podcast: Podcast) {
+        for episode in queue where episode.podcast?.persistentModelID == podcast.persistentModelID {
+            if episode.analysisState == .queued { episode.analysisState = .none }
+        }
+        queue.removeAll { $0.podcast?.persistentModelID == podcast.persistentModelID }
+        waitingCount = queue.count
+    }
+
+    /// Queues a show's downloaded episodes after scanning has been switched back on.
+    func enqueueDownloads(of podcast: Podcast) {
+        for episode in podcast.sortedEpisodes where episode.downloadState == .downloaded {
+            enqueue(episode)
         }
     }
 
@@ -194,7 +215,14 @@ final class AdAnalysisService {
         }
         episode.adSegments = analysis.segments
         episode.contentStart = analysis.contentStart
-        if fileSpecific { episode.fingerprint = analysis.fingerprint }
+        if fileSpecific {
+            episode.fingerprint = analysis.fingerprint
+            if let podcast = episode.podcast {
+                podcast.recordScan(foundAds: analysis.segments.contains { $0.kind == .ad })
+                // Just concluded the show is ad-free: drop its other waiting episodes.
+                if !podcast.shouldScanForAds { dropWaiting(for: podcast) }
+            }
+        }
         episode.analysisIsFileSpecific = fileSpecific
         episode.analysisState = .done
         episode.analysisNote = fileSpecific ? nil : (note ?? "From the publisher’s notes. Download the episode for exact timing.")
