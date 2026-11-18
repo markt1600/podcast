@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import BackgroundTasks
 
 /// Owns the long-lived services and wires them together.
 @MainActor
@@ -15,6 +16,26 @@ final class AppModel {
     let sync: CloudSync
 
     static let shared = AppModel()
+
+    /// Identifier of the periodic background check for new episodes
+    /// (also listed in Info.plist).
+    static let refreshTaskID = "com.skipcast.refresh"
+
+    /// Asks iOS to wake the app later to check for new episodes. iOS picks the
+    /// actual moment, based on how the app is used; this only sets the earliest.
+    static func scheduleBackgroundRefresh() {
+        let request = BGAppRefreshTaskRequest(identifier: refreshTaskID)
+        request.earliestBeginDate = Date.now.addingTimeInterval(3600)
+        try? BGTaskScheduler.shared.submit(request)
+    }
+
+    /// Runs when iOS grants a background refresh: look for new episodes (their
+    /// downloads then continue on their own) and book the next check.
+    static func backgroundRefresh() async {
+        scheduleBackgroundRefresh()
+        await shared.library.refreshAll()
+        try? shared.container.mainContext.save()
+    }
 
     private init() {
         do {
@@ -91,17 +112,23 @@ struct SkipCastApp: App {
                 .task {
                     await model.library.addStarterShowsIfNeeded()
                     await model.sync.syncNow()
-                    await model.library.refreshAll()
+                    await model.library.refreshIfStale(maxAge: 300)
                 }
         }
         .modelContainer(model.container)
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
                 try? model.container.mainContext.save()
+                AppModel.scheduleBackgroundRefresh()
                 Task { await model.sync.syncNow() }
             } else if phase == .active {
                 model.sync.schedule(after: 1)
+                // Back in the app after a while: see what has been published since.
+                Task { await model.library.refreshIfStale() }
             }
+        }
+        .backgroundTask(.appRefresh(AppModel.refreshTaskID)) {
+            await AppModel.backgroundRefresh()
         }
     }
 }

@@ -27,6 +27,12 @@ permission. Scanning happens on the device; audio is never uploaded.
   Wi-Fi only. After that, new episodes download as they are published (over
   mobile data too, unless you turn that off), keeping up to the number set in
   Settings.
+- **Checking for new episodes.** The app checks every show when it starts,
+  when you return to it after more than an hour, when you pull down on the
+  Library, and periodically in the background (iOS chooses when, typically a
+  few times a day for an app in regular use). New episodes found in the
+  background are downloaded straight away; they are scanned for ads the next
+  time the app is open.
 - **Scanning only where it helps.** Episodes whose show notes already list
   the sponsor breaks aren't scanned. Nor are shows without ads: after three
   scanned episodes in a row come up clean, the app stops scanning that show

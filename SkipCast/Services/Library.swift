@@ -107,14 +107,41 @@ final class Library {
         }
     }
 
+    /// Checks every show for new episodes. Feeds are fetched side by side, so
+    /// the whole pass fits in the short time iOS allows a background refresh.
     func refreshAll() async {
         guard !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false }
-        for podcast in podcasts() {
-            await refresh(podcast)
+        let shows = podcasts()
+        let urls = shows.map(\.feedURL)
+        let feeds = await withTaskGroup(of: (URL, ParsedFeed?).self) { group in
+            for url in urls {
+                group.addTask { (url, try? await DirectoryService.fetchFeed(url)) }
+            }
+            var result: [URL: ParsedFeed] = [:]
+            for await (url, feed) in group {
+                if let feed { result[url] = feed }
+            }
+            return result
         }
+        for podcast in shows where !podcast.isDeleted {
+            guard let feed = feeds[podcast.feedURL] else { continue }
+            let added = await merge(feed, into: podcast)
+            autoDownload(added, for: podcast)
+        }
+        try? context.save()
+        UserDefaults.standard.set(Date.now, forKey: Self.lastRefreshKey)
     }
+
+    /// Refreshes if the last full check was longer ago than `maxAge`.
+    func refreshIfStale(maxAge: TimeInterval = 3600) async {
+        let last = UserDefaults.standard.object(forKey: Self.lastRefreshKey) as? Date ?? .distantPast
+        guard Date.now.timeIntervalSince(last) > maxAge else { return }
+        await refreshAll()
+    }
+
+    private static let lastRefreshKey = "lastFullRefresh"
 
     /// Returns the episodes that were not known before.
     @discardableResult
