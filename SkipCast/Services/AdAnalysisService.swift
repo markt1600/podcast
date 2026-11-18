@@ -123,7 +123,7 @@ final class AdAnalysisService {
                 var words = partials[uid] ?? []
                 progress[uid] = scannedUpTo[uid].map { episode.duration > 0 ? $0 / episode.duration : 0 } ?? 0
                 var chunksSincePublish = 0
-                let finished = try await SpeechTranscriber().transcribe(file, from: scannedUpTo[uid] ?? 0) { chunk, upTo, fraction in
+                let finished = try await EpisodeTranscriber().transcribe(file, from: scannedUpTo[uid] ?? 0) { chunk, upTo, fraction in
                     words += chunk
                     self.progress[uid] = fraction
                     self.scannedUpTo[uid] = upTo

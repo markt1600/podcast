@@ -23,7 +23,7 @@ enum TranscriptionError: LocalizedError {
 /// The file is fed to the recogniser in chunks: one long request tends to
 /// lose earlier text and reset its timestamps, whereas short chunks keep every
 /// word and bound any timing error to a single chunk.
-struct SpeechTranscriber {
+struct EpisodeTranscriber {
     var locale = Locale(identifier: "en-US")
     var chunkLength: TimeInterval = 60
 
@@ -45,6 +45,15 @@ struct SpeechTranscriber {
     func transcribe(_ url: URL, from startTime: TimeInterval = 0,
                     onChunk: @MainActor ([TranscriptSegment], TimeInterval, Double) -> Bool) async throws -> Bool {
         guard await Self.requestAuthorization() else { throw TranscriptionError.notAuthorized }
+
+        #if compiler(>=6.2)
+        // iOS 26's long-form engine is far quicker than the classic recogniser.
+        // If it can't be set up (unsupported device, model not downloadable),
+        // carry on with the classic one below.
+        if #available(iOS 26.0, *), let engine = try? await LongFormTranscriber.prepare(locale: locale) {
+            return try await engine.transcribe(url, from: startTime, onChunk: onChunk)
+        }
+        #endif
         guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable,
               recognizer.supportsOnDeviceRecognition else { throw TranscriptionError.onDeviceUnavailable }
         guard let file = try? AVAudioFile(forReading: url) else { throw TranscriptionError.unreadableAudio }
