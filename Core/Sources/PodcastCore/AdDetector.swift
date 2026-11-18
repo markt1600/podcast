@@ -83,13 +83,15 @@ public struct AdDetector: Sendable {
             // and a trailing one ("…or head to acme.com") extends it.
             let support = cues.filter {
                 // A produced spot names its sponsor up front and its website half a minute later.
-                $0.weight < 3 && track.words[$0.first].start >= groupStart - 20
+                $0.weight < 3 && track.words[$0.first].start >= groupStart - ($0.brand != nil ? 45 : 20)
                     && track.words[$0.first].start <= groupEnd + ($0.brand != nil ? 45 : 15)
             }
             let score = group.reduce(0) { $0 + $1.weight } + min(3, support.reduce(0) { $0 + $1.weight })
             let labels = Set(group.map(\.label) + support.map(\.label))
             guard score >= options.minimumScore, labels.count >= 2 else { continue }
             if let trailing = support.map(\.last).max(), trailing > lastWord { lastWord = trailing }
+            // A sponsor's website named just before the first strong cue is part of the block too.
+            if let leading = support.filter({ $0.brand != nil }).map(\.first).min(), leading < firstWord { firstWord = leading }
 
             // Pull the start back to the sentence, then to the sponsor's first mention.
             // A read that opens by naming its sponsor starts right there. One that
@@ -267,7 +269,8 @@ public struct AdDetector: Sendable {
         // Sponsor attribution
         Pattern("sponsor attribution", 4, #"\b(brought to you|sponsored|presented) (in part )?by\b"#),
         Pattern("sponsor attribution", 4, #"\bsupport for (this|the|today's) (show|podcast|episode|program)\b"#),
-        Pattern("sponsor attribution", 4, #"\b(our|today's|this episode'?s?|this week's|the) sponsors?\b"#),
+        Pattern("sponsor attribution", 4, #"\b(our|today's|this episode'?s?|this week's) sponsors?\b"#),
+        Pattern("sponsor attribution", 4, #"\bthe sponsors? of (this|today's|the)\b"#),
         Pattern("sponsor attribution", 4, #"\b(thank|thanks|thanking) (again )?(to )?.{0,40}for sponsoring\b"#),
         // Public-radio and network style: "This message comes from…"
         Pattern("sponsor attribution", 4, #"\b(this|the following) message (comes|is|come) from\b"#),

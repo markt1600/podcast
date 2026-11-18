@@ -36,9 +36,9 @@ public struct EpisodeAnalyzer: Sendable {
     public init() {}
 
     private static let breakOut = try! NSRegularExpression(pattern:
-        #"\b(we'll|we will|we'll all) be (right )?back\b|\b(right )?after (the|this|a quick|a short|a) break\b|\bmore after this\b"#)
+        #"\b(we'll|we will|we'll all) be (right )?back\b|\b(right )?after (the|this|a quick|a short|a) break\b|\bmore after this\b|\b(going to |gonna )?come right back\b|\bdon't go anywhere\b|\bstay with (me|us)\b"#)
     private static let breakIn = try! NSRegularExpression(pattern:
-        #"\b(and )?(now )?back to the (show|episode|conversation|interview|program)\b|\bwelcome back\b|\band we're back\b"#)
+        #"\b(and )?(now )?back to the (show|episode|conversation|interview|program)\b|\bwelcome back\b|\band we're back\b|\bwelcome to (the|another|this)\b"#)
 
     /// "We'll be right back … and now back to the show": everything between
     /// the two is the ad break, whatever is said in it.
@@ -55,10 +55,15 @@ public struct EpisodeAnalyzer: Sendable {
             guard start >= (output.last?.end ?? 0),
                   let inWord = returns.first(where: { track.words[$0].start > start }) else { continue }
             let end = track.words[track.sentenceStart(before: inWord)].start
-            // Needs to look like a break: a plausible length and at least one sponsor named.
-            guard end - start >= 15, end - start <= maximumLength,
-                  cues.contains(where: { ($0.weight >= 3 || $0.brand != nil) && (start...end).contains(track.words[$0.first].start) })
-            else { continue }
+            // Needs to look like a break: a plausible length, and sponsors named all
+            // the way through it. (A stray "welcome back" minutes after an
+            // unrelated "stay with me" must not swallow the conversation between.)
+            guard end - start >= 15, end - start <= maximumLength else { continue }
+            let evidence = cues.filter { $0.weight >= 3 || $0.brand != nil }.map { track.words[$0.first].start }
+                .filter { (start...end).contains($0) }
+            guard !evidence.isEmpty else { continue }
+            let marks = [start] + evidence + [end]
+            guard zip(marks, marks.dropFirst()).allSatisfy({ $1 - $0 <= 100 }) else { continue }
             output.append(AdSegment(start: start, end: end, confidence: 0.95, reason: "announced ad break"))
         }
         return output
@@ -100,7 +105,9 @@ public struct EpisodeAnalyzer: Sendable {
             if slots[last].upperBound - segment.end <= 20 { segment.end = max(segment.end, slots[last].upperBound) }
 
             var added = 0
-            while added < 5, first > 0, segment.start <= slots[first].lowerBound + 0.01,
+            // Backwards, a slot only counts if it is fenced by silence on both sides:
+            // the opening of the episode before a first ad break is not a spot.
+            while added < 5, first > 1, segment.start <= slots[first].lowerBound + 0.01,
                   spotLength.contains(slots[first - 1].upperBound - slots[first - 1].lowerBound) {
                 first -= 1
                 segment.start = slots[first].lowerBound

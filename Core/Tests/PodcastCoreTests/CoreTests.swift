@@ -398,6 +398,23 @@ final class AdDetectorTests: XCTestCase {
         XCTAssertEqual(detector.detect(in: words(content + ".", from: 0) + words(sponsor, from: 100)).count, 1)
     }
 
+    func testAnnouncedBreakCoversSpotsWithNoAdLanguage() {
+        let spot = "Looking for a new mattress. Zorb has twenty models to choose from. Go to zorbsleep.com/pod for 20% off."
+        let plain = "If car shopping feels like a whole thing, buying your car online makes it way easier. Really. Shop tons of cars and compare prices from wherever you are."
+        let other = content.split(separator: " ").reversed().joined(separator: " ")
+        var evidence = EpisodeEvidence()
+        evidence.transcript = words(content + ". We'll be right back.", from: 0) + words(spot, from: 82) + words(plain, from: 100)
+            + words("All right, back to the show. " + other, from: 115)
+        let segments = EpisodeAnalyzer().analyze(evidence).segments
+        XCTAssertEqual(segments.count, 1, "\(segments)")
+        XCTAssertEqual(segments.first?.start ?? -1, 82, accuracy: 1)
+        XCTAssertEqual(segments.first?.end ?? -1, 115, accuracy: 3)
+
+        // "Stay with me" and a much later "welcome back" with nothing sponsor-like between: not a break.
+        evidence.transcript = words("Stay with me. " + content + ". Welcome back to the story. " + other, from: 0)
+        XCTAssertTrue(EpisodeAnalyzer().analyze(evidence).segments.isEmpty)
+    }
+
     func testIntroHandoff() {
         let intro = "Welcome to the show. Today my guest is a historian. Without further ado, please enjoy this conversation."
         let transcript = words(intro, from: 0) + words(content, from: 10)
