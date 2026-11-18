@@ -50,6 +50,8 @@ final class PlayerEngine {
     @ObservationIgnored var onFinished: ((Episode) -> Void)?
     /// Called when playback pauses or a show's speed changes, so state can be synced.
     @ObservationIgnored var onStateSaved: (() -> Void)?
+    /// Called when playback starts, pauses or changes episode.
+    @ObservationIgnored var onPlaybackChanged: (() -> Void)?
     @ObservationIgnored var onShowSettingChanged: ((Podcast) -> Void)?
 
     /// Speed for what is playing: the show's own if it has one, else the default.
@@ -77,6 +79,7 @@ final class PlayerEngine {
                 self?.isPlaying = status != .paused
                 self?.isBuffering = status == .waitingToPlayAtSpecifiedRate
                 self?.updateNowPlaying()
+                self?.onPlaybackChanged?()
             }
         }
         let center = NotificationCenter.default

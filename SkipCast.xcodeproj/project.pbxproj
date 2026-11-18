@@ -8,17 +8,49 @@
 
 /* Begin PBXBuildFile section */
 		5C0000000000000000000010 /* PodcastCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5C0000000000000000000011 /* PodcastCore */; };
+		5C00000000000000000000A1 /* PodcastCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5C00000000000000000000A2 /* PodcastCore */; };
+		5C00000000000000000000A3 /* SkipCastWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5C00000000000000000000A4 /* SkipCastWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		5C0000000000000000000001 /* SkipCast.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SkipCast.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5C0000000000000000000013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = Config/Info.plist; sourceTree = "<group>"; };
+		5C00000000000000000000A4 /* SkipCastWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SkipCastWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXContainerItemProxy section */
+		5C00000000000000000000A5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5C0000000000000000000009 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5C00000000000000000000A6;
+			remoteInfo = SkipCastWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		5C00000000000000000000A7 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				5C00000000000000000000A3 /* SkipCastWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		5C0000000000000000000002 /* SkipCast */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = SkipCast;
+			sourceTree = "<group>";
+		};
+		5C00000000000000000000A8 /* SkipCastWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SkipCastWidgets;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -32,6 +64,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5C00000000000000000000A9 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5C00000000000000000000A1 /* PodcastCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -40,6 +80,7 @@
 			children = (
 				5C0000000000000000000002 /* SkipCast */,
 				5C0000000000000000000013 /* Info.plist */,
+				5C00000000000000000000A8 /* SkipCastWidgets */,
 				5C0000000000000000000005 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -47,6 +88,7 @@
 		5C0000000000000000000005 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				5C00000000000000000000A4 /* SkipCastWidgets.appex */,
 				5C0000000000000000000001 /* SkipCast.app */,
 			);
 			name = Products;
@@ -62,10 +104,12 @@
 				5C0000000000000000000007 /* Sources */,
 				5C0000000000000000000003 /* Frameworks */,
 				5C0000000000000000000008 /* Resources */,
+				5C00000000000000000000A7 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				5C00000000000000000000AA /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				5C0000000000000000000002 /* SkipCast */,
@@ -78,6 +122,29 @@
 			productReference = 5C0000000000000000000001 /* SkipCast.app */;
 			productType = "com.apple.product-type.application";
 		};
+		5C00000000000000000000A6 /* SkipCastWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5C00000000000000000000AB /* Build configuration list for PBXNativeTarget "SkipCastWidgets" */;
+			buildPhases = (
+				5C00000000000000000000AC /* Sources */,
+				5C00000000000000000000A9 /* Frameworks */,
+				5C00000000000000000000AD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				5C00000000000000000000A8 /* SkipCastWidgets */,
+			);
+			name = SkipCastWidgets;
+			packageProductDependencies = (
+				5C00000000000000000000A2 /* PodcastCore */,
+			);
+			productName = SkipCastWidgets;
+			productReference = 5C00000000000000000000A4 /* SkipCastWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -89,6 +156,9 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					5C0000000000000000000006 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					5C00000000000000000000A6 = {
 						CreatedOnToolsVersion = 16.0;
 					};
 				};
@@ -111,12 +181,20 @@
 			projectRoot = "";
 			targets = (
 				5C0000000000000000000006 /* SkipCast */,
+				5C00000000000000000000A6 /* SkipCastWidgets */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		5C0000000000000000000008 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5C00000000000000000000AD /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -133,7 +211,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5C00000000000000000000AC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		5C00000000000000000000AA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5C00000000000000000000A6 /* SkipCastWidgets */;
+			targetProxy = 5C00000000000000000000A5 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		5C000000000000000000000E /* Debug */ = {
@@ -200,7 +293,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.skipcast.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.marktan.skipcast;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -232,8 +325,58 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.skipcast.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.marktan.skipcast;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		5C00000000000000000000AE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/Widgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Widgets-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = SkipCast;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.marktan.skipcast.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		5C00000000000000000000AF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/Widgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Widgets-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = SkipCast;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.marktan.skipcast.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -261,6 +404,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		5C00000000000000000000AB /* Build configuration list for PBXNativeTarget "SkipCastWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5C00000000000000000000AE /* Debug */,
+				5C00000000000000000000AF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -272,6 +424,10 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		5C0000000000000000000011 /* PodcastCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PodcastCore;
+		};
+		5C00000000000000000000A2 /* PodcastCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = PodcastCore;
 		};

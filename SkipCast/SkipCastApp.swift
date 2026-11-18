@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import UIKit
 import BackgroundTasks
+import PodcastCore
 
 /// Owns the long-lived services and wires them together.
 @MainActor
@@ -15,8 +16,18 @@ final class AppModel {
     let analysis: AdAnalysisService
     let sync: CloudSync
     let stats: ListeningStats
+    let widgets: WidgetBridge
 
     static let shared = AppModel()
+
+    /// Picks up listening where it left off (used when a widget is tapped).
+    func resumePlayback() {
+        if player.episode != nil {
+            player.play()
+        } else if let episode = widgets.currentEpisode() ?? widgets.upNext(limit: 1).first {
+            player.play(episode)
+        }
+    }
 
     /// Identifier of the periodic background check for new episodes
     /// (also listed in Info.plist).
@@ -53,9 +64,14 @@ final class AppModel {
         player = PlayerEngine(settings: settings, stats: stats)
         analysis = AdAnalysisService(context: context)
         sync = CloudSync(context: context, library: library)
+        widgets = WidgetBridge(context: context, player: player, stats: stats)
 
         downloads.onDownloaded = { [unowned self] episode in
             if settings.autoAnalyze { analysis.enqueue(episode) }
+            widgets.update()
+        }
+        player.onPlaybackChanged = { [unowned self] in
+            widgets.update()
         }
         downloads.onWillRemove = { [unowned self] episode in
             player.unload(episode)
@@ -73,6 +89,7 @@ final class AppModel {
         }
         player.onStateSaved = { [unowned self] in
             sync.schedule()
+            widgets.update()
         }
         player.onShowSettingChanged = { [unowned self] podcast in
             library.showSettingsChanged(podcast)
@@ -85,6 +102,7 @@ final class AppModel {
         }
         downloads.resume()
         analysis.resume()
+        widgets.update()
     }
 }
 
@@ -112,6 +130,9 @@ struct SkipCastApp: App {
                 .environment(model.analysis)
                 .environment(model.sync)
                 .environment(model.stats)
+                .onOpenURL { url in
+                    if url == WidgetSnapshot.resumeURL { model.resumePlayback() }
+                }
                 .tint(.orange)
                 .task {
                     await model.library.addStarterShowsIfNeeded()
@@ -124,6 +145,7 @@ struct SkipCastApp: App {
             if phase == .background {
                 try? model.container.mainContext.save()
                 model.stats.flush()
+                model.widgets.update()
                 AppModel.scheduleBackgroundRefresh()
                 Task { await model.sync.syncNow() }
             } else if phase == .active {

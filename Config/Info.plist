@@ -11,6 +11,17 @@
 	<array>
 		<string>com.skipcast.refresh</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>SkipCast</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>skipcast</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

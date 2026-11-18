@@ -13,8 +13,10 @@ You need a Mac with Xcode 16 or later.
 
 1. Open `SkipCast.xcodeproj`.
 2. Select the **SkipCast** target → *Signing & Capabilities* → pick your paid
-   Apple Developer team and change the bundle identifier to something unique
-   (for example `com.yourname.skipcast`). iCloud sync needs a paid team; with a
+   Apple Developer team, and do the same for the **SkipCastWidgets** target.
+   The bundle identifiers are `com.marktan.skipcast` and
+   `com.marktan.skipcast.widgets`; anyone else building this must change both,
+   and the app group in `Config/*.entitlements` and `WidgetSnapshot.appGroup`. iCloud sync needs a paid team; with a
    free Apple ID, clear *Code Signing Entitlements* in the build settings first.
 3. Plug in your iPhone, choose it as the run destination, and press Run.
 
@@ -38,8 +40,15 @@ permission. Scanning happens on the device; audio is never uploaded.
   scanned episodes in a row come up clean, the app stops scanning that show
   and rechecks one episode a month. Each show's menu has an *Ad scanning*
   setting (Automatic / Always scan / Never scan) to override this.
-- **Per-show speed.** Changing speed in the player is remembered for that
-  show. Shows without their own speed use the default from Settings.
+- **Per-show audio settings.** Speed, trim silence and voice boost changed in
+  the player are remembered for that show. Shows without their own settings
+  use the defaults from Settings. Trim silence needs the episode downloaded.
+- **Widgets.** A Now Playing widget (home screen small and medium, and lock
+  screen) and a Time Saved widget. Tapping Now Playing opens the app and
+  resumes. The widget extension needs your team selected under *Signing &
+  Capabilities* too, like the app.
+- **Importing and exporting subscriptions.** Settings → Subscriptions reads
+  and writes OPML, the format other podcast apps use.
 - **iCloud sync.** Subscriptions, per-show settings and your position in each
   episode sync between your devices. It is on by default and needs a paid
   Apple Developer team selected under *Signing & Capabilities* (Xcode adds the
