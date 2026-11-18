@@ -40,6 +40,37 @@ public struct EpisodeAnalyzer: Sendable {
     private static let breakIn = try! NSRegularExpression(pattern:
         #"\b(and )?(now )?back to the (show|episode|conversation|interview|program)\b|\bwelcome back\b|\band we're back\b|\bwelcome to (the|another|this)\b"#)
 
+    private static let segmentOpen = try! NSRegularExpression(pattern:
+        #"\b(this|special|next|following) segment (is |was )?(proudly |being )?(sponsored|brought to you|presented) by\b"#)
+    private static let segmentClose = try! NSRegularExpression(pattern:
+        #"\bfor sponsoring (this|the|that) segment\b|\bthis segment (was|has been) (proudly )?(sponsored|brought to you|presented) by\b"#)
+
+    /// A sponsored segment: content made for a sponsor, which the host opens
+    /// with "this segment is sponsored by…" and closes by thanking them.
+    static func sponsoredSegments(in track: WordTrack, cues: [AdDetector.Cue], maximumLength: TimeInterval = 600) -> [AdSegment] {
+        guard !track.words.isEmpty else { return [] }
+        let text = track.text as NSString
+        let whole = NSRange(location: 0, length: text.length)
+        let closes = segmentClose.matches(in: track.text, range: whole)
+            .map { track.wordIndex(atUTF16: $0.range.location + $0.range.length - 1) }
+        var output: [AdSegment] = []
+        for match in segmentOpen.matches(in: track.text, range: whole) {
+            let first = track.sentenceStart(before: track.wordIndex(atUTF16: match.range.location))
+            let start = track.words[first].start
+            guard start >= (output.last?.end ?? 0),
+                  let close = closes.first(where: { track.words[$0].start > start + 20 && track.words[$0].start - start <= maximumLength })
+            else { continue }
+            // The thank-you is usually followed by a last plug ("shop now at…").
+            var last = track.sentenceEnd(after: close)
+            for cue in cues where (cue.weight >= 1.5 || cue.brand != nil) && cue.first > last
+                && track.words[cue.first].start - track.words[last].end <= 30 {
+                last = track.sentenceEnd(after: cue.last)
+            }
+            output.append(AdSegment(start: start, end: track.words[last].end, confidence: 0.9, reason: "sponsored segment"))
+        }
+        return output
+    }
+
     /// "We'll be right back … and now back to the show": everything between
     /// the two is the ad break, whatever is said in it.
     static func announcedBreaks(in track: WordTrack, cues: [AdDetector.Cue], maximumLength: TimeInterval = 420) -> [AdSegment] {
@@ -151,7 +182,8 @@ public struct EpisodeAnalyzer: Sendable {
         // 2. Verbatim repeats.
         let allCues = detector.cues(in: track)
         let cues = allCues.filter { $0.weight >= 3 }
-        segments = AdDetector.merge(segments, Self.announcedBreaks(in: track, cues: allCues))
+        segments = AdDetector.merge(segments, Self.announcedBreaks(in: track, cues: allCues),
+                                    Self.sponsoredSegments(in: track, cues: allCues))
         for found in RepetitionDetector.repeats(in: track, reference: evidence.reference) {
             let range = found.range
             if let index = segments.firstIndex(where: { $0.kind == .ad && $0.start < range.upperBound && $0.end > range.lowerBound }) {

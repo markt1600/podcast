@@ -415,6 +415,25 @@ final class AdDetectorTests: XCTestCase {
         XCTAssertTrue(EpisodeAnalyzer().analyze(evidence).segments.isEmpty)
     }
 
+    func testSponsoredSegmentIsSkippedWhole() {
+        let other = content.split(separator: " ").reversed().joined(separator: " ")
+        let segment = """
+        This segment is sponsored by Zorbmart. While you are busy getting ready for the holidays their buyers have \
+        your back. \(other). I want to give another big thank you to Zorbmart for sponsoring this segment. \
+        Shop now at zorbmart.com or find a store near you.
+        """
+        var evidence = EpisodeEvidence()
+        evidence.transcript = words(content + ". I'll see you in the next episode.", from: 0) + words(segment, from: 100)
+        let segments = EpisodeAnalyzer().analyze(evidence).segments
+        XCTAssertEqual(segments.count, 1, "\(segments)")
+        XCTAssertEqual(segments.first?.start ?? -1, 100, accuracy: 1)
+        XCTAssertGreaterThan(segments.first?.duration ?? 0, 60)
+
+        // An opening with no closing thank-you can't be bounded, so it is left alone.
+        evidence.transcript = words("This segment is sponsored by Zorbmart. " + content + " " + other, from: 0)
+        XCTAssertTrue(EpisodeAnalyzer().analyze(evidence).segments.isEmpty)
+    }
+
     func testIntroHandoff() {
         let intro = "Welcome to the show. Today my guest is a historian. Without further ado, please enjoy this conversation."
         let transcript = words(intro, from: 0) + words(content, from: 10)
@@ -471,5 +490,37 @@ final class DiscoveryTests: XCTestCase {
         let picks = PodcastDiscovery.recommendations(charts: [tech, news],
                                                      subscribedFeedURLs: [URL(string: "http://ONE.example/feed")!])
         XCTAssertEqual(picks.map(\.id), [3, 2])
+    }
+}
+
+final class SyncMergeTests: XCTestCase {
+    func testNewerShowRecordWins() {
+        let local = [SyncedShow(feedURL: "https://a.example/feed", title: "A", speed: 1.0, introSkip: 0, updatedAt: 200),
+                     SyncedShow(feedURL: "https://b.example/feed", title: "B", speed: nil, introSkip: 0, updatedAt: 100)]
+        let remote = [SyncedShow(feedURL: "http://A.example/feed/", title: "A", speed: 1.5, introSkip: 30, updatedAt: 150),
+                      SyncedShow(feedURL: "https://b.example/feed", title: "B", speed: nil, introSkip: 0, updatedAt: 300, removed: true),
+                      SyncedShow(feedURL: "https://c.example/feed", title: "C", speed: 1.3, introSkip: 0, updatedAt: 50)]
+        let merged = SyncMerge.mergeShows(local: local, remote: remote)
+        XCTAssertEqual(merged.count, 3)
+        XCTAssertEqual(merged.first { $0.title == "A" }?.speed, 1.0)       // local change is newer
+        XCTAssertEqual(merged.first { $0.title == "B" }?.removed, true)    // removed on the other device
+        XCTAssertEqual(merged.first { $0.title == "C" }?.speed, 1.3)       // added on the other device
+        // Applying the same merge from the other side gives the same answer.
+        XCTAssertEqual(SyncMerge.mergeShows(local: remote, remote: local), merged)
+    }
+
+    func testProgressMergeAndCap() {
+        let local = ["ep1": SyncedProgress(position: 600, played: false, updatedAt: 20),
+                     "ep2": SyncedProgress(position: 0, played: true, updatedAt: 5)]
+        let remote = ["ep1": SyncedProgress(position: 300, played: false, updatedAt: 10),
+                      "ep2": SyncedProgress(position: 90, played: false, updatedAt: 8),
+                      "ep3": SyncedProgress(position: 42, played: false, updatedAt: 1)]
+        let merged = SyncMerge.mergeProgress(local: local, remote: remote)
+        XCTAssertEqual(merged["ep1"]?.position, 600)
+        XCTAssertEqual(merged["ep2"]?.played, false)
+        XCTAssertEqual(merged["ep3"]?.position, 42)
+        XCTAssertEqual(Set(SyncMerge.mergeProgress(local: local, remote: remote, limit: 2).keys), ["ep1", "ep2"])
+        XCTAssertEqual(SyncMerge.progressKey(forFeed: URL(string: "https://a.example/feed")!),
+                       SyncMerge.progressKey(forFeed: URL(string: "http://A.example/feed/")!))
     }
 }

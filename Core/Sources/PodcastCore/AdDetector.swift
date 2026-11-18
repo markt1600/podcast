@@ -263,7 +263,7 @@ public struct AdDetector: Sendable {
     private static let tld = "(?:com|co|org|net|io|ai|fm|app|tv|us|blog|health|shop|store|life)"
     /// Speech recognisers write "acme.com/show", "acme .com slash show" or
     /// "acme dot com slash show"; and often split the name ("helix sleep .com").
-    private static let domain = "((?:[a-z0-9-]+ )?[a-z0-9-]+) ?(?:\\.| dot )\(tld)\\b(?: ?\\.\(tld)\\b)*"
+    private static let domain = "((?:[a-z0-9-]+ )?[a-z0-9-]+(?:'s)?) ?(?:\\.| dot )\(tld)\\b(?: ?\\.\(tld)\\b)*"
 
     static let patterns: [Pattern] = [
         // Sponsor attribution
