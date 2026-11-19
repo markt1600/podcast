@@ -50,6 +50,7 @@ struct EpisodeTranscriber {
     ///   (the scan can be resumed later from the reported time).
     /// - Returns: whether the end of the file was reached, and which engine ran.
     func transcribe(_ url: URL, from startTime: TimeInterval = 0,
+                    onProgress: @escaping @Sendable (Double) -> Void = { _ in },
                     onChunk: @MainActor ([TranscriptSegment], TimeInterval, Double) -> Bool) async throws -> Outcome {
         guard await Self.requestAuthorization() else { throw TranscriptionError.notAuthorized }
 
@@ -58,7 +59,7 @@ struct EpisodeTranscriber {
         // If it can't be set up (unsupported device, model not downloadable),
         // carry on with the classic one below.
         if #available(iOS 26.0, *), let engine = try? await LongFormTranscriber.prepare(locale: locale) {
-            return Outcome(finished: try await engine.transcribe(url, from: startTime, onChunk: onChunk), fastEngine: true)
+            return Outcome(finished: try await engine.transcribe(url, from: startTime, onProgress: onProgress, onChunk: onChunk), fastEngine: true)
         }
         #endif
         guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable,

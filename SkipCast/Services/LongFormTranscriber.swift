@@ -37,6 +37,7 @@ struct LongFormTranscriber {
 
     /// Same contract as `EpisodeTranscriber.transcribe`.
     func transcribe(_ url: URL, from startTime: TimeInterval,
+                    onProgress: @escaping @Sendable (Double) -> Void,
                     onChunk: @MainActor ([TranscriptSegment], TimeInterval, Double) -> Bool) async throws -> Bool {
         guard let file = try? AVAudioFile(forReading: url),
               let converter = AVAudioConverter(from: file.processingFormat, to: format) else {
@@ -49,6 +50,12 @@ struct LongFormTranscriber {
         let analyzer = SpeechAnalyzer(modules: [transcriber])
         let (inputs, continuation) = AsyncStream.makeStream(of: AnalyzerInput.self)
         let progress = Progress(startTime)
+        // The engine reports how far it has got even when nobody is speaking;
+        // transcription results alone say nothing during music or silence.
+        await analyzer.setVolatileRangeChangedHandler { range, _, _ in
+            let reached = range.end.seconds
+            if reached.isFinite { progress.advance(to: reached) }
+        }
         let started = Date.now
 
         // Feeds audio a little ahead of the engine. Reading the whole file up
@@ -59,9 +66,20 @@ struct LongFormTranscriber {
             var fed = startTime
             var first = true
             while !Task.isCancelled, file.framePosition < file.length {
-                while fed - progress.value > 120 {
+                // Stay about two minutes ahead of the engine. If it shows no
+                // progress for a second, feed it anyway: a long stretch without
+                // speech must never leave both sides waiting on each other.
+                var waited = 0.0
+                var seen = progress.value
+                while fed - progress.value > 120, waited < 1 {
                     try? await Task.sleep(for: .milliseconds(40))
                     if Task.isCancelled { return }
+                    if progress.value > seen {
+                        seen = progress.value
+                        waited = 0
+                    } else {
+                        waited += 0.04
+                    }
                 }
                 guard let source = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: step),
                       (try? file.read(into: source, frameCount: step)) != nil, source.frameLength > 0,
@@ -72,6 +90,7 @@ struct LongFormTranscriber {
                 continuation.yield(AnalyzerInput(buffer: converted, bufferStartTime: time))
                 first = false
                 fed += Double(source.frameLength) / sourceRate
+                if duration > 0 { onProgress(min(1, max(progress.value, fed - 120) / duration)) }
             }
         }
         let analysis = Task {
@@ -92,7 +111,7 @@ struct LongFormTranscriber {
             for try await result in transcriber.results where result.isFinal {
                 pending += Self.words(in: result)
                 let reached = result.range.end.seconds
-                progress.value = reached
+                progress.advance(to: reached)
                 // Hand over about a minute of audio at a time.
                 guard reached - lastReport >= 60 else { continue }
                 lastReport = reached
@@ -163,8 +182,12 @@ struct LongFormTranscriber {
         }
 
         var value: Double {
-            get { lock.withLock { stored } }
-            set { lock.withLock { stored = newValue } }
+            lock.withLock { stored }
+        }
+
+        /// Progress only moves forwards, whichever source reports it.
+        func advance(to newValue: Double) {
+            lock.withLock { stored = max(stored, newValue) }
         }
     }
 }

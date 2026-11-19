@@ -203,9 +203,15 @@ final class AdAnalysisService {
                 let startedAt = Date.now
                 let startedFrom = scannedUpTo[uid] ?? 0
                 var lastPublish = Date.now
-                let outcome = try await EpisodeTranscriber().transcribe(file, from: startedFrom) { chunk, upTo, fraction in
+                let outcome = try await EpisodeTranscriber().transcribe(file, from: startedFrom, onProgress: { fraction in
+                    // Keeps the progress bar moving through music and silence,
+                    // where no words (and so no chunks) arrive.
+                    Task { @MainActor in
+                        if let shown = self.progress[uid], fraction > shown { self.progress[uid] = fraction }
+                    }
+                }) { chunk, upTo, fraction in
                     words += chunk
-                    self.progress[uid] = fraction
+                    self.progress[uid] = max(fraction, self.progress[uid] ?? 0)
                     self.scannedUpTo[uid] = upTo
                     // Now and then, publish what has been found so far, so skipping
                     // works on the part already scanned. Paced by the clock, not by
