@@ -434,6 +434,44 @@ final class AdDetectorTests: XCTestCase {
         XCTAssertTrue(EpisodeAnalyzer().analyze(evidence).segments.isEmpty)
     }
 
+    func testResearchTrialIsNotAnOffer() {
+        // "Start the trial" in a science discussion must not read as a sales offer
+        // and drag a nearby ad's start back into the conversation.
+        let science = "In the one trial that recorded the night it did not shorten sleep. They would start the next trial a week later."
+        let read = """
+        I just ordered my kit from zorbgene.com and I cannot wait to see what comes back. What I most want to learn \
+        about is my family history and whether there is anything I should be doing differently in the years ahead. \
+        Use promo code SHOW for 10 percent off. That's zorbgene.com promo code SHOW.
+        """
+        let lead = words(content + ". " + science, from: 0)
+        let readStart = lead.last!.end + 0.3
+        let found = AdDetector().detect(in: lead + words(content + ". " + read, from: readStart))
+        XCTAssertEqual(found.count, 1, "\(found)")
+        XCTAssertGreaterThan(found.first?.start ?? 0, readStart + 40, "\(found) readStart \(readStart)")
+    }
+
+    func testSpotsBeforeTheThemeAreOneAdBlock() {
+        // Three inserted spots, a short cold open, 28 s of theme music, then the show.
+        // Only the second spot uses advertising language.
+        let plain = "Starting a business can feel overwhelming but it does not have to be when the tools just work for you and your customers every single day of the year"
+        let branded = "This message is brought to you by Zorb Card. Apply in minutes at zorbcard.com to see your offer today"
+        let other = content.split(separator: " ").reversed().joined(separator: " ")
+        var evidence = EpisodeEvidence()
+        evidence.transcript = words(plain, from: 0) + words(branded, from: 20) + words(plain.uppercased() + " indeed", from: 40)
+            + words("So what are you doing there with that coffee", from: 62) + words(other + " " + content, from: 95)
+        let segments = EpisodeAnalyzer().analyze(evidence).segments.filter { $0.kind == .ad }
+        XCTAssertEqual(segments.count, 1, "\(segments)")
+        XCTAssertEqual(segments.first?.start ?? -1, 0, accuracy: 0.5)
+        // Covers all three spots (the third as a spot-length stretch fenced by pauses
+        // right after an ad) but not the cold open before the theme.
+        XCTAssertEqual(segments.first?.end ?? -1, 52, accuracy: 3)
+
+        // The same opening with no theme gap is ordinary detection: only the branded spot.
+        evidence.transcript = words(plain, from: 0) + words(branded, from: 20) + words(other + " " + content, from: 40)
+        let plainSegments = EpisodeAnalyzer().analyze(evidence).segments.filter { $0.kind == .ad }
+        XCTAssertTrue(plainSegments.allSatisfy { $0.start >= 15 }, "\(plainSegments)")
+    }
+
     func testIntroHandoff() {
         let intro = "Welcome to the show. Today my guest is a historian. Without further ado, please enjoy this conversation."
         let transcript = words(intro, from: 0) + words(content, from: 10)

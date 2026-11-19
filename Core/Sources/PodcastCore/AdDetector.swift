@@ -290,6 +290,11 @@ public struct AdDetector: Sendable {
         Pattern("call to action", 3, #"\b(tell them|let them know) .{0,24}sent you\b"#),
         Pattern("call to action", 3, #"\bwhere you heard about (them|us)\b"#),
         Pattern("discount offer", 3, #"\b(get|claim|grab) (your|a|an|my) (free|exclusive|special)\b"#),
+        // "Trial" on its own is everyday language (clinical trials, trial runs);
+        // only the commercial phrasings count.
+        Pattern("discount offer", 3, #"\b(sign up|signing up) for (your|a|an) .{0,30}\btrial\b"#),
+        Pattern("discount offer", 3, #"\b(\d+|one|seven|fourteen|thirty) ?(day|week|month) (free )?trial\b"#),
+        Pattern("discount offer", 3, #"\b(dollar|dollars) (per|a) month trial\b"#),
         // Hosts repeat the address: "again, that's acme.com".
         Pattern("repeated URL", 3, "\\b(?:again|that's|that is|once more|one more time) (?:[a-z0-9-]+ ){0,3}?" + domain, brandGroup: 1),
         // Weak, supporting evidence only
@@ -385,7 +390,9 @@ public struct AdDetector: Sendable {
         var candidates = Set<String>()
         for word in track.words where word.norm.count >= 3 {
             let norm = bare(word.norm)
-            guard names.contains(where: { $0 == norm || ($0.hasPrefix(norm) && norm.count >= 4) })
+            // A prefix has to be long enough to be a name: "helix" of "helixsleep",
+            // not "from" of "from zorb .com".
+            guard names.contains(where: { $0 == norm || ($0.hasPrefix(norm) && norm.count >= 5) })
                     || singleWordNames.contains(where: { $0.hasSuffix(norm) && norm.count >= 5 }) else { continue }
             candidates.insert(norm)
             // Mentions right around a sponsor URL are the ad itself, not general usage.
@@ -405,6 +412,7 @@ public struct AdDetector: Sendable {
     static let leadInWords: Set<String> = [
         "at", "to", "visit", "go", "is", "that's", "s", "in", "on", "the", "a", "and", "of", "by", "with", "check",
         "out", "via", "time", "just", "again", "try", "com", "it's", "called", "website", "site", "or", "online",
+        "from", "for", "see", "more", "find", "code", "use", "get", "shop", "now", "today", "over", "head", "that",
     ]
 
     static let commonWords: Set<String> = [

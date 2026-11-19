@@ -111,6 +111,50 @@ public struct EpisodeAnalyzer: Sendable {
         return output
     }
 
+    /// Pre-roll ads that play before the show's theme music.
+    ///
+    /// Many shows open with a run of inserted spots, then their theme, then
+    /// the episode. Which spots are inserted varies by listener and region, and
+    /// some carry no advertising language at all. But the shape is dependable:
+    /// if anything before the theme is recognisably an ad, everything from the
+    /// top of the file up to the last such spot is the ad block. A short cold
+    /// open between the last ad and the theme is left alone.
+    static func openingBlock(in track: WordTrack, cues: [AdDetector.Cue], known: [AdSegment],
+                             editPause: TimeInterval) -> [AdSegment] {
+        let words = track.words
+        guard words.count > 1, words[0].start <= 5 else { return [] }
+        // Stretches of speech before the first long wordless gap (the theme).
+        var slots: [ClosedRange<TimeInterval>] = []
+        var slotStart = words[0].start
+        var themeFound = false
+        var longGaps = 0
+        for index in 0..<(words.count - 1) {
+            let gap = words[index + 1].start - words[index].end
+            if gap > 30 { longGaps += 1 }
+            guard !themeFound, gap >= editPause else { continue }
+            slots.append(slotStart...max(slotStart, words[index].end))
+            slotStart = words[index + 1].start
+            if gap >= 15 {
+                themeFound = words[index].end <= 360
+                if !themeFound { return [] }
+            }
+        }
+        // No theme in the opening minutes, or a music show full of such gaps.
+        guard themeFound, longGaps < 2 else { return [] }
+
+        let evidence = cues.filter { $0.weight >= 1.5 || $0.brand != nil }.map { words[$0.first].start }
+        func isAd(_ slot: ClosedRange<TimeInterval>) -> Bool {
+            evidence.contains { slot.contains($0) }
+                || known.contains { $0.kind == .ad && $0.start < slot.upperBound && $0.end > slot.lowerBound }
+        }
+        // A single spot, or a couple run together, is at most a few minutes.
+        guard let last = slots.lastIndex(where: isAd),
+              slots[...last].allSatisfy({ $0.upperBound - $0.lowerBound <= 150 }) else { return [] }
+        let end = slots[last].upperBound
+        guard end - slots[0].lowerBound >= 10 else { return [] }
+        return [AdSegment(start: slots[0].lowerBound, end: end, confidence: 0.8, reason: "ads before the opening theme")]
+    }
+
     /// Inserted ads leave a beat of silence at every join, and conversation
     /// almost never pauses that long. So an ad that starts or ends near such
     /// a pause really starts or ends *at* it, and a short stretch of speech
@@ -184,6 +228,8 @@ public struct EpisodeAnalyzer: Sendable {
         let cues = allCues.filter { $0.weight >= 3 }
         segments = AdDetector.merge(segments, Self.announcedBreaks(in: track, cues: allCues),
                                     Self.sponsoredSegments(in: track, cues: allCues))
+        segments = AdDetector.merge(segments, Self.openingBlock(in: track, cues: allCues, known: segments,
+                                                                editPause: detector.options.editPause))
         for found in RepetitionDetector.repeats(in: track, reference: evidence.reference) {
             let range = found.range
             if let index = segments.firstIndex(where: { $0.kind == .ad && $0.start < range.upperBound && $0.end > range.lowerBound }) {
