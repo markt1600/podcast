@@ -242,6 +242,11 @@ struct EpisodeDetailView: View {
                 Label(ads.isEmpty ? "No ads found" : "\(ads.count) ad break\(ads.count == 1 ? "" : "s"), \(Format.length(ads.reduce(0) { $0 + $1.duration })) total",
                       systemImage: episode.analysisIsFileSpecific ? "checkmark.seal.fill" : "list.bullet.rectangle")
             }
+            if episode.analysisIsFileSpecific, let info = episode.scanInfo {
+                Text(info)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             if let failure = episode.scanFailure {
                 Label(failure, systemImage: "exclamationmark.triangle")
                     .font(.caption)

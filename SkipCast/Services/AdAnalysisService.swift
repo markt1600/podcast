@@ -33,6 +33,7 @@ final class AdAnalysisService {
     @ObservationIgnored private var queue: [Episode] = []
     @ObservationIgnored private var worker: Task<Void, Never>?
     @ObservationIgnored private var priorityUID: String?
+    @ObservationIgnored private var isPublishingPartial = false
 
     init(context: ModelContext) {
         self.context = context
@@ -197,16 +198,21 @@ final class AdAnalysisService {
                 // Pick up where an interrupted scan of this episode left off.
                 var words = partials[uid] ?? []
                 progress[uid] = scannedUpTo[uid].map { episode.duration > 0 ? $0 / episode.duration : 0 } ?? 0
-                var chunksSincePublish = 0
-                let finished = try await EpisodeTranscriber().transcribe(file, from: scannedUpTo[uid] ?? 0) { chunk, upTo, fraction in
+                // Loaded once per scan: it is the same for every interim result.
+                evidence.reference = referenceFingerprints(excluding: uid)
+                let startedAt = Date.now
+                let startedFrom = scannedUpTo[uid] ?? 0
+                var lastPublish = Date.now
+                let outcome = try await EpisodeTranscriber().transcribe(file, from: startedFrom) { chunk, upTo, fraction in
                     words += chunk
                     self.progress[uid] = fraction
                     self.scannedUpTo[uid] = upTo
-                    // Every few minutes of audio, publish what has been found so far,
-                    // so skipping works on the part already scanned.
-                    chunksSincePublish += 1
-                    if chunksSincePublish >= 4 {
-                        chunksSincePublish = 0
+                    // Now and then, publish what has been found so far, so skipping
+                    // works on the part already scanned. Paced by the clock, not by
+                    // audio covered: the fast engine gets through minutes of audio a
+                    // second, and re-analysing that often would slow the scan itself.
+                    if Date.now.timeIntervalSince(lastPublish) >= 20 {
+                        lastPublish = .now
                         self.publishPartial(words, base: evidence, for: episode)
                     }
                     // Step aside if the user has started playing a different episode.
@@ -216,6 +222,14 @@ final class AdAnalysisService {
                     return true
                 }
                 progress[uid] = nil
+                let finished = outcome.finished
+                if finished {
+                    let elapsed = max(1, Date.now.timeIntervalSince(startedAt))
+                    let covered = max(0, (scannedUpTo[uid] ?? startedFrom) - startedFrom)
+                    episode.scanInfo = "Scanned \(Format.length(covered)) of audio in \(Format.length(elapsed)), \(Int((covered / elapsed).rounded()))× speed"
+                        + (outcome.fastEngine ? "" : " (classic speech engine)")
+                    log.info("\(episode.scanInfo ?? "", privacy: .public)")
+                }
                 guard finished else {
                     partials[uid] = words
                     if !episode.isDeleted {
@@ -246,7 +260,7 @@ final class AdAnalysisService {
         }
         guard !episode.isDeleted else { return }
 
-        evidence.reference = referenceFingerprints(excluding: uid)
+        if evidence.reference.isEmpty { evidence.reference = referenceFingerprints(excluding: uid) }
         let analysis = await Task.detached(priority: .utility) { [evidence] in
             EpisodeAnalyzer().analyze(evidence)
         }.value
@@ -282,10 +296,13 @@ final class AdAnalysisService {
     /// Analyses the part transcribed so far and stores the result, leaving the
     /// episode marked as still being scanned.
     private func publishPartial(_ words: [TranscriptSegment], base: EpisodeEvidence, for episode: Episode) {
+        // One interim analysis at a time; the next one will cover more anyway.
+        guard !isPublishingPartial else { return }
+        isPublishingPartial = true
         var evidence = base
         evidence.transcript = words
-        evidence.reference = referenceFingerprints(excluding: episode.uid)
         Task {
+            defer { isPublishingPartial = false }
             let analysis = await Task.detached(priority: .utility) { [evidence] in
                 EpisodeAnalyzer().analyze(evidence)
             }.value
@@ -301,7 +318,7 @@ final class AdAnalysisService {
     private func referenceFingerprints(excluding uid: String) -> Set<UInt64> {
         var descriptor = FetchDescriptor<Episode>(predicate: #Predicate { $0.fingerprintData != nil && $0.uid != uid },
                                                   sortBy: [SortDescriptor(\.pubDate, order: .reverse)])
-        descriptor.fetchLimit = 12
+        descriptor.fetchLimit = 8
         var reference = Set<UInt64>()
         for episode in (try? context.fetch(descriptor)) ?? [] {
             reference.formUnion(episode.fingerprint)

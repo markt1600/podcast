@@ -27,6 +27,13 @@ struct EpisodeTranscriber {
     var locale = Locale(identifier: "en-US")
     var chunkLength: TimeInterval = 60
 
+    struct Outcome {
+        /// The end of the file was reached (false: stopped early at the caller's request).
+        var finished: Bool
+        /// The iOS 26 long-form engine did the work, rather than the classic recogniser.
+        var fastEngine: Bool
+    }
+
     static func requestAuthorization() async -> Bool {
         await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
@@ -41,9 +48,9 @@ struct EpisodeTranscriber {
     /// - Parameter onChunk: receives the chunk's words, the time transcribed up
     ///   to, and the fraction of the file done. Return false to stop early
     ///   (the scan can be resumed later from the reported time).
-    /// - Returns: true if the end of the file was reached.
+    /// - Returns: whether the end of the file was reached, and which engine ran.
     func transcribe(_ url: URL, from startTime: TimeInterval = 0,
-                    onChunk: @MainActor ([TranscriptSegment], TimeInterval, Double) -> Bool) async throws -> Bool {
+                    onChunk: @MainActor ([TranscriptSegment], TimeInterval, Double) -> Bool) async throws -> Outcome {
         guard await Self.requestAuthorization() else { throw TranscriptionError.notAuthorized }
 
         #if compiler(>=6.2)
@@ -51,7 +58,7 @@ struct EpisodeTranscriber {
         // If it can't be set up (unsupported device, model not downloadable),
         // carry on with the classic one below.
         if #available(iOS 26.0, *), let engine = try? await LongFormTranscriber.prepare(locale: locale) {
-            return try await engine.transcribe(url, from: startTime, onChunk: onChunk)
+            return Outcome(finished: try await engine.transcribe(url, from: startTime, onChunk: onChunk), fastEngine: true)
         }
         #endif
         guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable,
@@ -71,9 +78,9 @@ struct EpisodeTranscriber {
             chunkStart += frames
             let shifted = words.map { TranscriptSegment(start: $0.start + offset, end: $0.end + offset, text: $0.text) }
             let keepGoing = await onChunk(shifted, Double(chunkStart) / format.sampleRate, Double(chunkStart) / Double(totalFrames))
-            if !keepGoing { return false }
+            if !keepGoing { return Outcome(finished: false, fastEngine: false) }
         }
-        return true
+        return Outcome(finished: true, fastEngine: false)
     }
 
     private func recognizeChunk(file: AVAudioFile, start: AVAudioFramePosition, frames: AVAudioFramePosition,

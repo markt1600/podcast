@@ -50,6 +50,8 @@ final class Episode {
     /// True when the ad timings were measured on the downloaded file and are
     /// therefore only valid for that exact file.
     var analysisIsFileSpecific: Bool = false
+    /// How the last full scan went, e.g. "Scanned at 40× speed (fast engine)".
+    var scanInfo: String?
     /// Why the last attempt to scan the audio failed; nil if it hasn't failed.
     var scanFailure: String?
     /// Set when playback showed that this audio does not line up with the
