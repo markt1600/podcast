@@ -26,6 +26,8 @@ final class AdAnalysisService {
     /// The episode being scanned right now, and how many are waiting.
     private(set) var currentUID: String?
     private(set) var waitingCount = 0
+    /// Episodes the user has asked to be scanned again, until that scan finishes.
+    private(set) var rescanning: Set<String> = []
     /// Transcripts of scans that were set aside for a more urgent episode.
     @ObservationIgnored private var partials: [String: [TranscriptSegment]] = [:]
     @ObservationIgnored private var queue: [Episode] = []
@@ -101,6 +103,27 @@ final class AdAnalysisService {
         startWorkerIfNeeded()
     }
 
+    /// Throws away what is known about an episode's ads and scans its audio
+    /// afresh. Until the new scan finishes the episode counts as unscanned.
+    func rescan(_ episode: Episode) {
+        let uid = episode.uid
+        // Already being scanned or waiting: nothing to add.
+        guard currentUID != uid, !queue.contains(where: { $0.uid == uid }) else { return }
+        partials[uid] = nil
+        scannedUpTo[uid] = nil
+        episode.adSegments = []
+        episode.contentStart = nil
+        episode.analysisIsFileSpecific = false
+        episode.scanFailure = nil
+        episode.analysisNote = nil
+        episode.analysisState = .none
+        rescanning.insert(uid)
+        enqueue(episode, force: true)
+        // Nothing to scan after all (the file is gone): don't leave it marked pending.
+        if !queue.contains(where: { $0.uid == uid }) { rescanning.remove(uid) }
+        try? context.save()
+    }
+
     /// Queues every downloaded episode that still needs its audio scanned.
     ///
     /// The queue itself lives in memory, so this runs at each launch to pick up
@@ -133,7 +156,10 @@ final class AdAnalysisService {
     }
 
     func isWorking(on episode: Episode) -> Bool {
-        progress[episode.uid] != nil || queue.contains { $0.uid == episode.uid }
+        // Reading the count ties views to changes in the queue, which is not
+        // itself observed.
+        _ = waitingCount
+        return progress[episode.uid] != nil || queue.contains { $0.uid == episode.uid }
     }
 
     private func startWorkerIfNeeded() {
@@ -151,6 +177,8 @@ final class AdAnalysisService {
                 currentUID = episode.uid
                 await analyze(episode)
                 currentUID = nil
+                // Set aside for a more urgent episode? Then it is still pending.
+                if !queue.contains(where: { $0.uid == episode.uid }) { rescanning.remove(episode.uid) }
             }
             worker = nil
         }

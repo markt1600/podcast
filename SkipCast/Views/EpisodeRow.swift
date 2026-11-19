@@ -80,7 +80,7 @@ struct EpisodeRow: View {
             Label("Scanning \(Int(fraction * 100))%", systemImage: "waveform.badge.magnifyingglass")
                 .foregroundStyle(.orange)
         } else if episode.downloadState == .downloaded, episode.analysisState == .queued || analysis.isWorking(on: episode) {
-            Label("Waiting to scan", systemImage: "clock")
+            Label(analysis.rescanning.contains(episode.uid) ? "Rescan pending" : "Waiting to scan", systemImage: "clock")
         } else if episode.scanSkippedForShow, episode.downloadState == .downloaded {
             Label("Ad-free show", systemImage: "checkmark.seal")
         } else if episode.analysisState == .done {
@@ -227,8 +227,15 @@ struct EpisodeDetailView: View {
                     Text("Scanned to \(Format.clock(upTo)). Ads before that point are already skipped.")
                 }
             }
-        } else if episode.analysisState == .queued || episode.analysisState == .analyzing {
-            Label("Waiting to scan", systemImage: "clock")
+        } else if episode.analysisState == .queued || episode.analysisState == .analyzing || analysis.isWorking(on: episode) {
+            if analysis.rescanning.contains(episode.uid) {
+                Label("Rescan pending", systemImage: "clock.arrow.circlepath")
+                Text("The previous result has been cleared. Ads will be marked again when the new scan finishes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Label("Waiting to scan", systemImage: "clock")
+            }
         } else {
             if episode.analysisState == .done {
                 let ads = episode.adSegments.filter { $0.kind == .ad }
@@ -247,7 +254,7 @@ struct EpisodeDetailView: View {
             }
             if episode.downloadState == .downloaded {
                 Button(episode.analysisIsFileSpecific ? "Scan again" : "Scan audio for ads", systemImage: "waveform.badge.magnifyingglass") {
-                    analysis.enqueue(episode, force: true)
+                    analysis.rescan(episode)
                 }
             } else if episode.downloadState == .none {
                 Button("Download and scan", systemImage: "arrow.down.circle") { downloads.download(episode) }
