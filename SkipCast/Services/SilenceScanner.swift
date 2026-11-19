@@ -6,6 +6,10 @@ import PodcastCore
 /// Measures the loudness of a downloaded episode to find its pauses. This
 /// only decodes the audio (no speech recognition), so it takes seconds.
 enum SilenceScanner {
+    /// Bumped whenever the way pauses are found changes, so maps saved by an
+    /// older version are worked out again.
+    static let version = 2
+
     static func scan(_ url: URL) -> [ClosedRange<TimeInterval>] {
         guard let file = try? AVAudioFile(forReading: url) else { return [] }
         let format = file.processingFormat
@@ -29,6 +33,6 @@ enum SilenceScanner {
                 offset += count
             }
         }
-        return SilenceFinder.silences(levels: levels, window: window)
+        return SilenceFinder.silences(levels: levels, window: window, threshold: SilenceFinder.threshold(for: levels))
     }
 }

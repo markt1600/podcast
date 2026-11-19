@@ -64,6 +64,8 @@ final class Episode {
 
     /// Pauses found in the downloaded audio, as start/end pairs of seconds.
     @Attribute(.externalStorage) var silenceData: Data?
+    /// `SilenceScanner.version` that produced `silenceData`.
+    var silenceVersion: Int = 0
 
     var podcast: Podcast?
 

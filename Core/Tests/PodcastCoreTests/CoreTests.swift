@@ -594,15 +594,29 @@ final class OPMLTests: XCTestCase {
 
 final class SilenceFinderTests: XCTestCase {
     func testFindsLongPausesOnly() {
-        // 50 ms windows: 1 s speech, 0.3 s pause, 1 s speech, 1.5 s pause, speech.
+        // 50 ms windows: 1 s speech, 0.5 s pause, 1 s speech, 1.5 s pause, speech.
         let speech = [Float](repeating: -20, count: 20)
-        let levels = speech + [Float](repeating: -60, count: 6) + speech + [Float](repeating: -60, count: 30) + speech
+        let levels = speech + [Float](repeating: -70, count: 10) + speech + [Float](repeating: -70, count: 30) + speech
         let silences = SilenceFinder.silences(levels: levels, window: 0.05)
         XCTAssertEqual(silences.count, 1)
-        XCTAssertEqual(silences[0].lowerBound, 2.3 + 0.15, accuracy: 0.001)
-        XCTAssertEqual(silences[0].upperBound, 3.8 - 0.15, accuracy: 0.001)
+        // Starts a little into the pause and ends well before speech resumes.
+        XCTAssertEqual(silences[0].lowerBound, 2.5 + 0.15, accuracy: 0.001)
+        XCTAssertEqual(silences[0].upperBound, 4.0 - 0.35, accuracy: 0.001)
         XCTAssertNotNil(SilenceFinder.silence(at: 3.0, in: silences))
         XCTAssertNil(SilenceFinder.silence(at: 1.0, in: silences))
-        XCTAssertNil(SilenceFinder.silence(at: 3.75, in: silences))
+        XCTAssertNil(SilenceFinder.silence(at: 3.8, in: silences))
+    }
+
+    func testQuietSpeechIsNotSilence() {
+        // A softly spoken aside 25 dB under the normal level is still speech.
+        let normal = [Float](repeating: -22, count: 400)
+        let quiet = [Float](repeating: -47, count: 40)
+        let levels = normal + quiet + normal
+        let threshold = SilenceFinder.threshold(for: levels)
+        XCTAssertLessThan(threshold, -47)
+        XCTAssertTrue(SilenceFinder.silences(levels: levels, window: 0.05, threshold: threshold).isEmpty)
+        // A recording mastered very quietly gets a lower threshold, within limits.
+        XCTAssertEqual(SilenceFinder.threshold(for: [Float](repeating: -40, count: 100)), -62)
+        XCTAssertEqual(SilenceFinder.threshold(for: [Float](repeating: -5, count: 100)), -45)
     }
 }

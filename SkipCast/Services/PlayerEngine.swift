@@ -36,8 +36,12 @@ final class PlayerEngine {
     @ObservationIgnored private var silences: [ClosedRange<Double>] = []
     /// The pause playback is currently hurrying through, if any.
     @ObservationIgnored private var currentSilence: ClosedRange<Double>?
-    /// How much faster than the chosen speed pauses are played.
-    private static let silenceRate = 3.0
+    /// Restores normal speed at the moment a pause ends.
+    @ObservationIgnored private var silenceEnd: Task<Void, Never>?
+    /// How much faster than the chosen speed pauses are played, and the
+    /// fastest that may ever be.
+    private static let silenceRate = 2.5
+    private static let maximumSilenceRate = 4.0
     @ObservationIgnored private let player = AVPlayer()
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var statusObservation: NSKeyValueObservation?
@@ -128,8 +132,8 @@ final class PlayerEngine {
         // Time-domain stretching keeps voices natural at 1.25–2×.
         item.audioTimePitchAlgorithm = .timeDomain
         player.replaceCurrentItem(with: item)
-        currentSilence = nil
-        silences = episode.silences
+        endSilence(countAsTrimmed: false)
+        silences = episode.silenceVersion == SilenceScanner.version ? episode.silences : []
         applyVoiceBoost()
         prepareSilences(for: episode)
 
@@ -160,13 +164,14 @@ final class PlayerEngine {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
         try? AVAudioSession.sharedInstance().setActive(true)
         wantsToPlay = true
-        currentSilence = nil
+        endSilence(countAsTrimmed: false)
         player.defaultRate = Float(speed)
         player.rate = Float(speed)
     }
 
     func pause() {
         wantsToPlay = false
+        endSilence(countAsTrimmed: false)
         player.pause()
         savePosition()
         stats.flush()
@@ -232,9 +237,8 @@ final class PlayerEngine {
         }
         if on {
             prepareSilences(for: episode)
-        } else if currentSilence != nil {
-            currentSilence = nil
-            if isPlaying { player.rate = Float(speed) }
+        } else {
+            endSilence(countAsTrimmed: false)
         }
     }
 
@@ -263,29 +267,52 @@ final class PlayerEngine {
 
     /// Finds the episode's pauses the first time they are needed.
     private func prepareSilences(for episode: Episode) {
-        guard trimSilence, silences.isEmpty, let file = episode.localFileURL else { return }
+        // Already worked out by this version (even if it found none)? Nothing to do.
+        guard trimSilence, episode.silenceVersion != SilenceScanner.version, let file = episode.localFileURL else { return }
         let uid = episode.uid
         Task {
             let found = await Task.detached(priority: .utility) { SilenceScanner.scan(file) }.value
-            guard !episode.isDeleted, !found.isEmpty else { return }
+            guard !episode.isDeleted else { return }
             episode.silences = found
+            episode.silenceVersion = SilenceScanner.version
             if self.episode?.uid == uid { silences = found }
         }
     }
 
-    /// Plays pauses several times faster, returning to normal as speech resumes.
+    /// Plays pauses faster, and is back at normal speed before speech resumes.
     private func silenceTick(_ time: Double) {
-        guard isPlaying, time.isFinite else { return }
-        let silence = trimSilence ? SilenceFinder.silence(at: time, in: silences) : nil
-        if let silence, currentSilence == nil {
-            currentSilence = silence
-            player.rate = Float(min(speed * Self.silenceRate, 8))
-        } else if silence == nil, let finished = currentSilence {
-            currentSilence = nil
-            player.rate = Float(speed)
+        guard isPlaying, time.isFinite, currentSilence == nil, trimSilence,
+              let silence = SilenceFinder.silence(at: time, in: silences) else {
+            // Left the pause some other way (a seek, a skip): make sure speed is normal.
+            if let current = currentSilence, time.isFinite, !current.contains(time) { endSilence(countAsTrimmed: false) }
+            return
+        }
+        let fast = min(speed * Self.silenceRate, max(speed, Self.maximumSilenceRate))
+        let remaining = silence.upperBound - time
+        // Too little left to be worth a change of speed.
+        guard fast > speed, remaining > 0.2 else { return }
+        currentSilence = silence
+        player.rate = Float(fast)
+        // Checking the clock ten times a second would overshoot into the next
+        // words at this speed, so the return to normal is timed exactly.
+        silenceEnd = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(remaining / fast))
+            guard !Task.isCancelled else { return }
+            self?.endSilence(countAsTrimmed: true)
+        }
+    }
+
+    private func endSilence(countAsTrimmed: Bool) {
+        silenceEnd?.cancel()
+        silenceEnd = nil
+        guard let finished = currentSilence else { return }
+        currentSilence = nil
+        if isPlaying, wantsToPlay { player.rate = Float(speed) }
+        if countAsTrimmed {
             // Time the pause would have taken, less the time it did take.
+            let fast = min(speed * Self.silenceRate, max(speed, Self.maximumSilenceRate))
             let length = finished.upperBound - finished.lowerBound
-            stats.recordSilence(seconds: length / speed * (1 - 1 / Self.silenceRate))
+            stats.recordSilence(seconds: length / speed - length / fast)
         }
     }
 
