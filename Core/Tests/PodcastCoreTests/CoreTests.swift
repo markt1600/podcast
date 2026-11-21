@@ -479,6 +479,11 @@ final class AdDetectorTests: XCTestCase {
         XCTAssertEqual(start ?? -1, 7, accuracy: 1.5)
         XCTAssertNil(IntroDetector().contentStart(in: words(content, from: 0), ads: []))
 
+        // Hand-off, then a 15-second montage fenced by pauses, then the conversation.
+        let montage = "At this altitude I can run flat out for a half mile before my hands start shaking. I am a cybernetic organism."
+        let withSting = words(intro, from: 0) + words(montage, from: 9) + words(content, from: 22)
+        XCTAssertEqual(IntroDetector().contentStart(in: withSting, ads: []) ?? -1, 22, accuracy: 0.5)
+
         // A teaser, then an ad break a minute in: the episode starts after the break.
         let earlyBreak = [AdSegment(start: 67, end: 204, confidence: 1, reason: "")]
         XCTAssertEqual(IntroDetector().contentStart(in: [], ads: earlyBreak), 204)

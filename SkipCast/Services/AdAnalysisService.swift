@@ -203,6 +203,9 @@ final class AdAnalysisService {
                 let startedAt = Date.now
                 let startedFrom = scannedUpTo[uid] ?? 0
                 var lastPublish = Date.now
+                // The intro is found in the first couple of minutes of audio, and
+                // the listener may already be in it, so that much is published at once.
+                var publishedOpening = startedFrom > 0
                 let outcome = try await EpisodeTranscriber().transcribe(file, from: startedFrom, onProgress: { fraction in
                     // Keeps the progress bar moving through music and silence,
                     // where no words (and so no chunks) arrive.
@@ -217,7 +220,9 @@ final class AdAnalysisService {
                     // works on the part already scanned. Paced by the clock, not by
                     // audio covered: the fast engine gets through minutes of audio a
                     // second, and re-analysing that often would slow the scan itself.
-                    if Date.now.timeIntervalSince(lastPublish) >= 20 {
+                    let openingReady = !publishedOpening && upTo >= 150
+                    if openingReady || Date.now.timeIntervalSince(lastPublish) >= 20 {
+                        publishedOpening = publishedOpening || openingReady
                         lastPublish = .now
                         self.publishPartial(words, base: evidence, for: episode)
                     }

@@ -50,6 +50,9 @@ final class PlayerEngine {
     /// Segments the user chose to hear (by undoing a skip or seeking into them).
     @ObservationIgnored private var allowedSegments: Set<Double> = []
     @ObservationIgnored private var wantsToPlay = false
+    /// The episode was started from the top without a known intro; if the scan
+    /// finds one while it is still playing, skip the rest of it.
+    @ObservationIgnored private var introPending = false
 
     @ObservationIgnored var onFinished: ((Episode) -> Void)?
     /// Called when playback pauses or a show's speed changes, so state can be synced.
@@ -150,6 +153,9 @@ final class PlayerEngine {
                 stats.recordSkip(isAd: false, seconds: introEnd)
             }
         }
+        // Started from the top with no intro known yet (a new episode whose scan
+        // hasn't got there): keep an eye out for one.
+        introPending = start < 1 && settings.skipIntros
         if start > 0 {
             currentTime = start
             player.seek(to: CMTime(seconds: start, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
@@ -185,6 +191,8 @@ final class PlayerEngine {
     /// User-initiated seek.
     func seek(to time: Double) {
         let target = min(max(0, time), duration > 0 ? max(0, duration - 1) : time)
+        // The listener has taken charge of where they are.
+        introPending = false
         // Seeking into an ad on purpose means the user wants to hear it.
         if let segment = activeSegments.first(where: { target >= $0.start && target < $0.end }) {
             allowedSegments.insert(segment.start)
@@ -392,6 +400,21 @@ final class PlayerEngine {
             }
             if episode.duration == 0 || episode.analysisIsFileSpecific || episode.localFileURL != nil { episode.duration = itemDuration }
             updateNowPlaying()
+        }
+
+        if introPending {
+            let manual = episode.podcast?.introSkipSeconds ?? 0
+            let introEnd = manual > 0 ? manual : (episode.contentStart ?? 0)
+            if !settings.skipIntros || time > 600 || (introEnd > 0 && time >= introEnd - 2) {
+                // Switched off, already past it, or evidently no intro to find.
+                introPending = false
+            } else if introEnd > 0, isPlaying, duration == 0 || introEnd < duration - 30 {
+                introPending = false
+                lastSkip = SkipEvent(from: time, to: introEnd, label: "Skipped intro", segmentStart: nil)
+                stats.recordSkip(isAd: false, seconds: introEnd - time)
+                jump(to: introEnd)
+                return
+            }
         }
 
         if isPlaying, let hit = AdSkipPlanner.skipTarget(at: time, segments: activeSegments) {

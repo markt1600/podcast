@@ -38,7 +38,7 @@ public struct IntroDetector: Sendable {
 
         // Transcript: the host hands over to the episode ("…please enjoy").
         if let handoff = Self.lastHandoff(in: track, before: maximumIntro) {
-            candidates.append(handoff)
+            candidates.append(Self.afterSting(following: handoff, in: track))
         }
 
         // Recurring intro material and opening ads: from the very top, or after a
@@ -66,9 +66,35 @@ public struct IntroDetector: Sendable {
         #"\bwithout (any )?further (ado|delay)\b"#,
         #"\band now (for )?(my|our|the) (discussion|conversation|interview|chat)\b"#,
         #"\bhere'?s? (is )?(my|our) (discussion|conversation|interview|chat) with\b"#,
-        #"\blet's (get started|get into it|dive in|jump in|get to it)\b"#,
+        #"\blet's (get started|get into it|dive in|dig in|jump in|hop in|hop into it|get to it)\b"#,
         #"\bon with the show\b"#,
     ].joined(separator: "|"))
+
+    /// Many shows follow the hand-off with a short produced sting (a montage of
+    /// clips, a jingle with a voice-over) before the conversation starts. It
+    /// shows up as one or two short stretches of speech fenced by clear pauses.
+    /// Returns where speech resumes after it, or `handoff` if there is none.
+    static func afterSting(following handoff: TimeInterval, in track: WordTrack,
+                           maximumLength: TimeInterval = 40, pause: TimeInterval = 3) -> TimeInterval {
+        let words = track.words
+        var start = handoff
+        var index = track.wordIndex(atTime: handoff - 0.01)
+        var stings = 0
+        while stings < 3, index < words.count - 1 {
+            // Find the next clear pause, if it comes soon enough.
+            var end = index
+            while end < words.count - 1, words[end + 1].start - words[end].end < pause,
+                  words[end].end - start <= maximumLength {
+                end += 1
+            }
+            guard end < words.count - 1, words[end + 1].start - words[end].end >= pause,
+                  words[end].end - start <= maximumLength else { break }
+            start = words[end + 1].start
+            index = end + 1
+            stings += 1
+        }
+        return start
+    }
 
     /// End of the sentence containing the last hand-off phrase in the opening minutes.
     static func lastHandoff(in track: WordTrack, before limit: TimeInterval) -> TimeInterval? {
