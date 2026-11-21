@@ -66,7 +66,7 @@ public struct IntroDetector: Sendable {
         #"\bwithout (any )?further (ado|delay)\b"#,
         #"\band now (for )?(my|our|the) (discussion|conversation|interview|chat)\b"#,
         #"\bhere'?s? (is )?(my|our) (discussion|conversation|interview|chat) with\b"#,
-        #"\blet's (get started|get into it|dive in|dig in|jump in|hop in|hop into it|get to it)\b"#,
+        #"\blet's (get started|get into it|dive in|dig in|jump in|get to it)\b"#,
         #"\bon with the show\b"#,
     ].joined(separator: "|"))
 
